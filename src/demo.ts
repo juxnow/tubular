@@ -3,18 +3,19 @@ import { issueAuthorityLease } from "./authority/types.js";
 import { createDefaultRegistry } from "./catalog.js";
 import { createHandoffEnvelope } from "./context/handoff.js";
 import { buildContextManifest, type ContextSource } from "./context/manifest.js";
-import { stablePrettyStringify, type JsonObject } from "./core/json.js";
+import { type JsonObject, stablePrettyStringify } from "./core/json.js";
 import type { Clock } from "./core/time.js";
 import {
+  ContextRegistrationAuthority,
   HumanApprovalAuthority,
   LeaseIssuerAuthority,
-  ContextRegistrationAuthority,
   TotallyTubularKernel,
 } from "./runtime/kernel.js";
 
 const DEMO_TIME = "2026-09-13T16:00:00.000Z";
 
 const clock: Clock = {
+  /** Return the fixed demonstration instant so generated evidence is reproducible. */
   now(): Date {
     return new Date(DEMO_TIME);
   },
@@ -171,8 +172,7 @@ const summary: JsonObject = {
     auditEventId: executed.receipt.auditEventId,
     digest: executed.receipt.digest,
   },
-  workspaceRevision:
-    workspace.read("workspace://demo/architecture.md")?.revision ?? null,
+  workspaceRevision: workspace.read("workspace://demo/architecture.md")?.revision ?? null,
   audit: {
     valid: verification.valid,
     eventCount: verification.eventCount,

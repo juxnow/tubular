@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { verifyAuditEvents, type AuditEvent } from "../src/audit/audit-log.js";
-import {
-  issueAuthorityLease,
-  verifyExecutionReceiptIntegrity,
-} from "../src/authority/types.js";
+import { type AuditEvent, verifyAuditEvents } from "../src/audit/audit-log.js";
+import { issueAuthorityLease, verifyExecutionReceiptIntegrity } from "../src/authority/types.js";
+import { createDefaultRegistry } from "../src/catalog.js";
 import { buildContextManifest } from "../src/context/manifest.js";
 import {
   HumanApprovalAuthority,
   LeaseIssuerAuthority,
+  TotallyTubularKernel,
 } from "../src/runtime/kernel.js";
 import { createFixture } from "./support.js";
 
+/** Create an accepted append proposal under the fixture lease without automatically approving it. */
 function proposeAllowedNote(fixture: ReturnType<typeof createFixture>, text = "approved text") {
   return fixture.kernel.propose({
     principalId: "agent.test",
@@ -22,16 +22,140 @@ function proposeAllowedNote(fixture: ReturnType<typeof createFixture>, text = "a
 }
 
 describe("trusted execution kernel", () => {
+  it("validates host identity namespaces and permits deterministic independent kernel namespaces", () => {
+    const first = createFixture({ proposalNamespace: "host_A" });
+    const second = createFixture({ proposalNamespace: "host_B" });
+    const a = proposeAllowedNote(first);
+    const b = proposeAllowedNote(second);
+    if (!a.ok || !b.ok) throw new Error("Expected proposals");
+    expect(a.proposal.id).toBe("proposal_host_A_1");
+    expect(b.proposal.id).toBe("proposal_host_B_1");
+    for (const proposalNamespace of ["", "untrusted.scope", "x".repeat(65)]) {
+      expect(
+        () => new TotallyTubularKernel(createDefaultRegistry(), first.clock, { proposalNamespace }),
+      ).toThrow(/proposalNamespace/);
+    }
+  });
+  it("isolates identical fixed-clock submissions and exact approvals while replaying each ID", async () => {
+    const f = createFixture({ maxUses: 2 });
+    const first = proposeAllowedNote(f);
+    const second = proposeAllowedNote(f);
+    if (!first.ok || !second.ok || first.challenge === null || second.challenge === null)
+      throw new Error("Expected challenges");
+    expect(first.proposal.id).toBe("proposal_test_1");
+    expect(second.proposal.id).toBe("proposal_test_2");
+    expect(first.proposal.createdAt).toBe(second.proposal.createdAt);
+    expect(first.proposal.input).toEqual(second.proposal.input);
+    expect(first.proposal.digest).not.toBe(second.proposal.digest);
+    expect(first.challenge.id).not.toBe(second.challenge.id);
+    const approval = {
+      challengeId: first.challenge.id,
+      proposalId: first.proposal.id,
+      proposalDigest: first.proposal.digest,
+      proposalRevision: 1,
+      authority: f.approvalAuthority,
+    };
+    const firstApproval = f.kernel.approve(approval);
+    expect(firstApproval.ok).toBe(true);
+    expect(
+      f.kernel.approve({
+        ...approval,
+        challengeId: second.challenge.id,
+        proposalId: second.proposal.id,
+      }),
+    ).toMatchObject({ ok: false, failure: { code: "APPROVAL_MISMATCH" } });
+    expect(await f.kernel.execute(second.proposal.id)).toMatchObject({
+      ok: false,
+      failure: { code: "APPROVAL_REQUIRED" },
+    });
+    const secondApproval = f.kernel.approve({
+      ...approval,
+      challengeId: second.challenge.id,
+      proposalId: second.proposal.id,
+      proposalDigest: second.proposal.digest,
+    });
+    if (!firstApproval.ok || !secondApproval.ok) throw new Error("Expected isolated approvals");
+    expect(secondApproval.approval.id).not.toBe(firstApproval.approval.id);
+    const executed = await Promise.all([
+      f.kernel.execute(first.proposal.id),
+      f.kernel.execute(second.proposal.id),
+      f.kernel.execute(first.proposal.id),
+    ]);
+    expect(executed.map((result) => result.ok && result.replayed)).toEqual([false, false, true]);
+    expect(f.workspace.read("workspace://allowed/note.md")?.entries).toEqual([
+      "approved text",
+      "approved text",
+    ]);
+    expect(await f.kernel.execute(first.proposal.id)).toMatchObject({ ok: true, replayed: true });
+    expect(f.kernel.audit.verify().valid).toBe(true);
+  });
+
+  it("reserves replay before dispatch even when an executor re-enters execute synchronously", async () => {
+    let calls = 0;
+    const replays: Promise<import("../src/runtime/kernel.js").ExecutionResult>[] = [];
+    const f = createFixture({
+      maxUses: 2,
+      executor: {
+        toolName: "workspace.note.append",
+        idempotency: "proposal-id",
+        /** Test executor used to observe dispatch count, concurrency, cancellation, or uncertain effect behavior. */
+        async execute(_input, context) {
+          calls += 1;
+          if (calls === 1) replays.push(f.kernel.execute(context.proposal.id));
+          return {
+            resource: "workspace://allowed/note.md",
+            revision: calls,
+            entryCount: calls,
+            appendedCharacters: 1,
+          };
+        },
+      },
+    });
+    const p = proposeAllowedNote(f);
+    if (!p.ok || p.challenge === null) throw new Error("Expected challenge");
+    f.kernel.approve({
+      challengeId: p.challenge.id,
+      proposalId: p.proposal.id,
+      proposalDigest: p.proposal.digest,
+      proposalRevision: 1,
+      authority: f.approvalAuthority,
+    });
+    expect(await f.kernel.execute(p.proposal.id)).toMatchObject({ ok: true, replayed: false });
+    expect(await Promise.all(replays)).toMatchObject([{ ok: true, replayed: true }]);
+    expect(calls).toBe(1);
+  });
+
+  it("spends a shared one-use lease atomically across separate concurrent proposals", async () => {
+    const f = createFixture();
+    const proposals = [proposeAllowedNote(f), proposeAllowedNote(f)];
+    const ids = proposals.map((p) => {
+      if (!p.ok || p.challenge === null) throw new Error("Expected challenge");
+      f.kernel.approve({
+        challengeId: p.challenge.id,
+        proposalId: p.proposal.id,
+        proposalDigest: p.proposal.digest,
+        proposalRevision: 1,
+        authority: f.approvalAuthority,
+      });
+      return p.proposal.id;
+    });
+    const results = await Promise.all(ids.map((id) => f.kernel.execute(id)));
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results).toContainEqual(
+      expect.objectContaining({
+        ok: false,
+        failure: expect.objectContaining({ code: "POLICY_DENIED" }),
+      }),
+    );
+    expect(f.workspace.read("workspace://allowed/note.md")?.entries).toHaveLength(1);
+  });
   it("returns a principal-scoped status without proposal inputs or authority ids", () => {
     const fixture = createFixture({ maxUses: 4 });
     const proposed = proposeAllowedNote(fixture, "status-secret-sentinel");
     if (!proposed.ok) {
       throw new Error("Expected an accepted proposal");
     }
-    const visible = fixture.kernel.getProposalStatus(
-      "agent.test",
-      proposed.proposal.id,
-    );
+    const visible = fixture.kernel.getProposalStatus("agent.test", proposed.proposal.id);
     expect(visible).toMatchObject({
       ok: true,
       status: {
@@ -69,6 +193,7 @@ describe("trusted execution kernel", () => {
       executor: {
         toolName: "workspace.note.append",
         idempotency: "proposal-id",
+        /** Test executor used to observe dispatch count, concurrency, cancellation, or uncertain effect behavior. */
         async execute() {
           await gate;
           return {
@@ -94,15 +219,13 @@ describe("trusted execution kernel", () => {
       }).ok,
     ).toBe(true);
     const execution = fixture.kernel.execute(proposed.proposal.id);
-    expect(
-      fixture.kernel.getProposalStatus("agent.test", proposed.proposal.id),
-    ).toMatchObject({ ok: true, status: { state: "executing" } });
+    expect(fixture.kernel.getProposalStatus("agent.test", proposed.proposal.id)).toMatchObject({
+      ok: true,
+      status: { state: "executing" },
+    });
     release?.();
     expect((await execution).ok).toBe(true);
-    const completed = fixture.kernel.getProposalStatus(
-      "agent.test",
-      proposed.proposal.id,
-    );
+    const completed = fixture.kernel.getProposalStatus("agent.test", proposed.proposal.id);
     expect(completed).toMatchObject({
       ok: true,
       status: { state: "succeeded" },
@@ -125,9 +248,10 @@ describe("trusted execution kernel", () => {
     if (!first.ok) {
       return;
     }
-    expect(
-      fixture.kernel.getProposalStatus("agent.test", first.proposal.id),
-    ).toMatchObject({ ok: true, status: { state: "approval-expired" } });
+    expect(fixture.kernel.getProposalStatus("agent.test", first.proposal.id)).toMatchObject({
+      ok: true,
+      status: { state: "approval-expired" },
+    });
     expect(proposeAllowedNote(fixture, "slot reclaimed").ok).toBe(true);
   });
 
@@ -279,12 +403,7 @@ describe("trusted execution kernel", () => {
     const fixture = createFixture({ maxUses: 1 });
     const first = proposeAllowedNote(fixture, "first");
     const second = proposeAllowedNote(fixture, "second");
-    if (
-      !first.ok ||
-      first.challenge === null ||
-      !second.ok ||
-      second.challenge === null
-    ) {
+    if (!first.ok || first.challenge === null || !second.ok || second.challenge === null) {
       throw new Error("Expected two approval challenges");
     }
     for (const proposed of [first, second]) {
@@ -452,9 +571,7 @@ describe("trusted execution kernel", () => {
 
   it("honors lease revocation before a proposal", () => {
     const fixture = createFixture();
-    expect(
-      fixture.kernel.revokeLease(fixture.lease.id, fixture.leaseIssuerAuthority),
-    ).toBe(true);
+    expect(fixture.kernel.revokeLease(fixture.lease.id, fixture.leaseIssuerAuthority)).toBe(true);
     expect(proposeAllowedNote(fixture)).toMatchObject({
       ok: false,
       failure: {
@@ -478,9 +595,9 @@ describe("trusted execution kernel", () => {
       authority: fixture.approvalAuthority,
     });
     expect(approval.ok).toBe(true);
-    expect(
-      fixture.kernel.revokeApproval(proposed.proposal.id, fixture.approvalAuthority),
-    ).toBe(true);
+    expect(fixture.kernel.revokeApproval(proposed.proposal.id, fixture.approvalAuthority)).toBe(
+      true,
+    );
     expect(await fixture.kernel.execute(proposed.proposal.id)).toMatchObject({
       ok: false,
       failure: { code: "APPROVAL_REVOKED" },
@@ -514,6 +631,7 @@ describe("trusted execution kernel", () => {
       executor: {
         toolName: "workspace.note.append",
         idempotency: "proposal-id",
+        /** Test executor used to observe dispatch count, concurrency, cancellation, or uncertain effect behavior. */
         async execute() {
           calls += 1;
           throw new Error("secret-provider-detail");
@@ -541,9 +659,7 @@ describe("trusted execution kernel", () => {
     });
     expect(second).toEqual(first);
     expect(calls).toBe(1);
-    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain(
-      "secret-provider-detail",
-    );
+    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain("secret-provider-detail");
   });
 
   it("captures an executor implementation when it is registered", async () => {
@@ -552,6 +668,7 @@ describe("trusted execution kernel", () => {
     const executor = {
       toolName: "workspace.note.append",
       idempotency: "proposal-id" as const,
+      /** Test executor used to observe dispatch count, concurrency, cancellation, or uncertain effect behavior. */
       async execute() {
         originalCalls += 1;
         return {
@@ -607,12 +724,15 @@ describe("trusted execution kernel", () => {
   it("rejects a caller-fabricated authority lease", () => {
     const fixture = createFixture();
     expect(() =>
-      fixture.kernel.registerLease({
-        ...fixture.lease,
-        id: "lease_fabricated",
-        digest: "not-a-digest",
-        maxUses: 999,
-      }, fixture.leaseIssuerAuthority),
+      fixture.kernel.registerLease(
+        {
+          ...fixture.lease,
+          id: "lease_fabricated",
+          digest: "not-a-digest",
+          maxUses: 999,
+        },
+        fixture.leaseIssuerAuthority,
+      ),
     ).toThrow("integrity check");
   });
 

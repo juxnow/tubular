@@ -1,10 +1,11 @@
-import { McpServer, fromJsonSchema } from "@modelcontextprotocol/server";
+import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
+import { createMcpToolBindings } from "../contracts/projections.js";
 import type { JsonObject } from "../core/json.js";
 import { stableStringify } from "../core/json.js";
-import { createMcpToolBindings } from "../contracts/projections.js";
 import type { PortAuthorityDefinition } from "../port-authority/definition.js";
 import type { GatewayResult, ProposalOnlyGateway } from "./gateway.js";
 
+/** Serialize a sanitized gateway result as MCP text and structured content, marking rejections as errors. */
 function toolResult(result: GatewayResult) {
   return {
     content: [{ type: "text" as const, text: stableStringify(result) }],
@@ -13,6 +14,7 @@ function toolResult(result: GatewayResult) {
   };
 }
 
+/** Register native proposal and status MCP tools; the gateway supplies fixed identity and never exposes approval or dispatch. */
 export function buildMcpServer(
   portAuthority: PortAuthorityDefinition,
   gateway: ProposalOnlyGateway,
@@ -38,9 +40,10 @@ export function buildMcpServer(
         descriptor.name,
         {
           ...options,
-          inputSchema: fromJsonSchema<{ proposalId: string }>(
-            descriptor.inputSchema,
-          ),
+          inputSchema: fromJsonSchema<{
+            /** Identity of one submitted proposal, distinct even from an identical independent submission. */
+            proposalId: string;
+          }>(descriptor.inputSchema),
         },
         async ({ proposalId }) => toolResult(gateway.status(proposalId)),
       );

@@ -1,0 +1,156 @@
+{
+  "openapi": "3.1.0",
+  "x-documentation-projection": true,
+  "x-network-endpoint": false,
+  "info": {
+    "title": "Tubular typed capabilities",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/tools/tool-findProjects": {
+      "post": {
+        "x-documentation-projection": true,
+        "x-network-endpoint": false,
+        "operationId": "findProjects",
+        "description": "Find projects in the selected workspace without fetching additional context.",
+        "summary": "Find projects",
+        "x-tubular-effect": "read",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Tool0Input"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching project names, capped by the requested limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Tool0Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Projection of input validation failure before dispatch. A future HTTP host must implement this mapping.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolInputValidationFailure"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Approval, policy, and execution failures require a host-defined HTTP mapping. No HTTP error endpoint or automatic retry behavior is implemented."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ToolInputValidationFailure": {
+        "type": "object",
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Stable diagnostic category such as `type`, `unknown_property`, or `invalid_schema`."
+                },
+                "message": {
+                  "type": "string",
+                  "description": "Explanation of the violated contract, intended for developers rather than policy decisions."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Value location: generated validators use JSON Pointer with an empty root; legacy parsers use slash paths with `/` at the root."
+                }
+              },
+              "required": [
+                "code",
+                "message",
+                "path"
+              ],
+              "additionalProperties": false,
+              "description": "A validation diagnostic. Paths identify values without including their contents."
+            },
+            "description": "Field paths and reasons, without echoing the rejected values or host context."
+          },
+          "status": {
+            "type": "string",
+            "const": "invalid_input",
+            "description": "Stable discriminator used by adapters to distinguish pre-dispatch validation failure."
+          }
+        },
+        "required": [
+          "issues",
+          "status"
+        ],
+        "additionalProperties": false,
+        "description": "Input rejected before authorization or handler execution by the lightweight runtime."
+      },
+      "Tool0Input": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum returned matches. Omission uses the handler's limit of 10.",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "examples": [
+              5
+            ]
+          },
+          "query": {
+            "type": "string",
+            "description": "Text to find within a project name; empty searches are rejected.",
+            "minLength": 1,
+            "maxLength": 100,
+            "examples": [
+              "tubular"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "description": "Case-insensitive search over the project names explicitly supplied by the host.",
+        "examples": [
+          {
+            "query": "tubular",
+            "limit": 5
+          }
+        ]
+      },
+      "Tool0Output": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names within the selected host context. No project metadata is fetched."
+          }
+        },
+        "required": [
+          "projects"
+        ],
+        "additionalProperties": false,
+        "description": "Matching names in the host's original order; an empty list is a successful search."
+      }
+    }
+  }
+}

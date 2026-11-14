@@ -1,72 +1,108 @@
 import { deepFreezeJsonObject, type JsonValue } from "../core/json.js";
 import type { PortAuthorityReference } from "./definition.js";
 import {
+  type ContextRecord,
   createPortAuthorityInvocation,
   createPortAuthoritySuccessOutcome,
-  PORT_AUTHORITY_INVOCATION_PROTOCOL,
-  PORT_AUTHORITY_OUTCOME_PROTOCOL,
-  type ContextRecord,
   type ExternalIdentityReference,
   type OpaqueTrace,
-  type PrincipalReference,
-  type ProvenanceReference,
-  type ScopeReference,
+  PORT_AUTHORITY_INVOCATION_PROTOCOL,
+  PORT_AUTHORITY_OUTCOME_PROTOCOL,
   type PortAuthorityInvocation,
   type PortAuthorityOutcome,
   type PortAuthoritySuccessOutcome,
+  type PrincipalReference,
+  type ProvenanceReference,
+  type ScopeReference,
 } from "./messages.js";
 
+/** Reserved trace namespace used to preserve legacy AAPI provider request identifiers. */
 export const AAPI_V0_PROVIDER_TRACE_NAMESPACE = "aapi-v0" as const;
+/** Trace kind distinguishing legacy provider request references from other diagnostics. */
 export const AAPI_V0_PROVIDER_TRACE_KIND = "provider-request" as const;
 
+/** Scope categories understood by the legacy AAPI compatibility adapter, not a finalized MCCP specification. */
 export type AapiV0ScopeKind = "private" | "project" | "external-resource";
 
+/** Legacy provider subject reference preserved during translation without authentication. */
 export interface AapiV0ExternalIdentity {
+  /** Legacy provider namespace, translated without assuming provider authentication. */
   readonly provider: string;
+  /** External system's subject identifier within its namespace; host verification is required. */
   readonly subject: string;
 }
 
+/** Legacy principal plus one external identity; the host must establish both independently of model arguments. */
 export interface AapiV0Principal {
+  /** Host-selected principal identity preserved across legacy translation without authentication. */
   readonly id: string;
+  /** Legacy external identity assertion; translation preserves it without authenticating it. */
   readonly externalIdentity: AapiV0ExternalIdentity;
 }
 
+/** Legacy scope selection mapped to one portable scope reference. */
 export interface AapiV0Scope {
+  /** Scope identity meaningful within its legacy scope kind. */
   readonly id: string;
+  /** One of the three supported legacy scope kinds; other portable kinds cannot be translated losslessly. */
   readonly kind: AapiV0ScopeKind;
 }
 
+/** Legacy source location metadata translated without retrieval or authority inference. */
 export interface AapiV0SourceReference {
+  /** Legacy provider namespace, translated without assuming provider authentication. */
   readonly provider: string;
+  /** Legacy source resource kind retained during portable-message translation. */
   readonly resourceType: string;
+  /** Provider-scoped source resource identifier, retained without dereferencing it. */
   readonly resourceId: string;
+  /** Parent resource identifier when known; absence or null means no parent was supplied. */
   readonly parentResourceId?: string;
 }
 
+/** Legacy textual context record with author attribution and source provenance. */
 export interface AapiV0ContextItem {
+  /** Source context record identity preserved during translation. */
   readonly id: string;
+  /** Legacy human-readable attribution, not an authenticated author identity. */
   readonly authorLabel: string;
+  /** Source-supplied event time retained during translation; message validation only checks nonempty text. */
   readonly occurredAt: string;
+  /** Explicitly supplied context payload; provenance and classification do not make its instructions trusted. */
   readonly content: string;
+  /** Explicit source provenance retained without retrieval or authority inference. */
   readonly source: AapiV0SourceReference;
 }
 
+/** Legacy invocation envelope translated to portable contract references without executing the capability. */
 export interface AapiV0Invocation<TInput> {
+  /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
+  /** Explicit host-selected principal reference; message construction does not authenticate it. */
   readonly principal: AapiV0Principal;
+  /** Single selected legacy scope; this shape cannot represent multiple portable scopes. */
   readonly scope: AapiV0Scope;
+  /** Exact capability reference selected from the portable definition. */
   readonly capability: string;
+  /** Untrusted capability input. Validate it before dispatch; its fields never establish host authority. */
   readonly input: TInput;
+  /** Explicit source provenance retained without retrieval or authority inference. */
   readonly source: AapiV0SourceReference;
 }
 
+/** Legacy successful result plus optional provider trace; failures have no equivalent in this legacy shape. */
 export interface AapiV0Result<TOutput> {
+  /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
+  /** Exact capability reference selected from the portable definition. */
   readonly capability: string;
+  /** Successful capability output, which must satisfy the declared output schema before disclosure. */
   readonly output: TOutput;
+  /** Optional provider trace identifier, preserved as diagnostic data rather than execution proof. */
   readonly providerRequestId?: string;
 }
 
+/** Translate a legacy provider subject to a frozen namespaced reference without authenticating it. */
 export function aapiV0ExternalIdentityToPortAuthority(
   identity: AapiV0ExternalIdentity,
 ): ExternalIdentityReference {
@@ -76,6 +112,7 @@ export function aapiV0ExternalIdentityToPortAuthority(
   });
 }
 
+/** Translate a namespaced subject into the legacy provider shape without adding authority. */
 export function portAuthorityExternalIdentityToAapiV0(
   identity: ExternalIdentityReference,
 ): AapiV0ExternalIdentity {
@@ -85,25 +122,19 @@ export function portAuthorityExternalIdentityToAapiV0(
   });
 }
 
-export function aapiV0PrincipalToPortAuthority(
-  principal: AapiV0Principal,
-): PrincipalReference {
+/** Translate a legacy principal into a frozen portable principal with one external identity. */
+export function aapiV0PrincipalToPortAuthority(principal: AapiV0Principal): PrincipalReference {
   return deepFreezeJsonObject({
     id: principal.id,
-    externalIdentities: [
-      aapiV0ExternalIdentityToPortAuthority(principal.externalIdentity),
-    ],
+    externalIdentities: [aapiV0ExternalIdentityToPortAuthority(principal.externalIdentity)],
   });
 }
 
-export function portAuthorityPrincipalToAapiV0(
-  principal: PrincipalReference,
-): AapiV0Principal {
+/** Translate only principals with exactly one external identity; reject unrepresentable multi-identity values. */
+export function portAuthorityPrincipalToAapiV0(principal: PrincipalReference): AapiV0Principal {
   const identity = principal.externalIdentities[0];
   if (principal.externalIdentities.length !== 1 || identity === undefined) {
-    throw new TypeError(
-      "An AAPI v0 principal must have exactly one external identity",
-    );
+    throw new TypeError("An AAPI v0 principal must have exactly one external identity");
   }
   return Object.freeze({
     id: principal.id,
@@ -111,10 +142,12 @@ export function portAuthorityPrincipalToAapiV0(
   });
 }
 
+/** Preserve a legacy scope's identifier and kind in a frozen portable reference. */
 export function aapiV0ScopeToPortAuthority(scope: AapiV0Scope): ScopeReference {
   return deepFreezeJsonObject({ id: scope.id, kind: scope.kind });
 }
 
+/** Translate only the three legacy scope kinds; reject newer kinds instead of silently coercing them. */
 export function portAuthorityScopeToAapiV0(scope: ScopeReference): AapiV0Scope {
   if (!isAapiV0ScopeKind(scope.kind)) {
     throw new TypeError(`Unsupported AAPI v0 scope kind: ${scope.kind}`);
@@ -122,9 +155,8 @@ export function portAuthorityScopeToAapiV0(scope: ScopeReference): AapiV0Scope {
   return Object.freeze({ id: scope.id, kind: scope.kind });
 }
 
-export function aapiV0SourceToPortAuthority(
-  source: AapiV0SourceReference,
-): ProvenanceReference {
+/** Translate source metadata, using explicit null for an absent parent reference. */
+export function aapiV0SourceToPortAuthority(source: AapiV0SourceReference): ProvenanceReference {
   return deepFreezeJsonObject({
     namespace: source.provider,
     resourceKind: source.resourceType,
@@ -133,9 +165,8 @@ export function aapiV0SourceToPortAuthority(
   });
 }
 
-export function portAuthoritySourceToAapiV0(
-  source: ProvenanceReference,
-): AapiV0SourceReference {
+/** Translate source metadata, omitting the legacy parent property when the portable parent is null. */
+export function portAuthoritySourceToAapiV0(source: ProvenanceReference): AapiV0SourceReference {
   if (source.parentResourceId === null) {
     return Object.freeze({
       provider: source.namespace,
@@ -151,9 +182,8 @@ export function portAuthoritySourceToAapiV0(
   });
 }
 
-export function aapiV0ContextItemToPortAuthority(
-  item: AapiV0ContextItem,
-): ContextRecord {
+/** Preserve text, attribution, time, and provenance in a frozen portable context record. */
+export function aapiV0ContextItemToPortAuthority(item: AapiV0ContextItem): ContextRecord {
   return deepFreezeJsonObject({
     id: item.id,
     attribution: { label: item.authorLabel },
@@ -163,9 +193,8 @@ export function aapiV0ContextItemToPortAuthority(
   });
 }
 
-export function portAuthorityContextItemToAapiV0(
-  item: ContextRecord,
-): AapiV0ContextItem {
+/** Translate text context only; reject nonstring payloads that the legacy shape cannot preserve. */
+export function portAuthorityContextItemToAapiV0(item: ContextRecord): AapiV0ContextItem {
   if (typeof item.content !== "string") {
     throw new TypeError("An AAPI v0 context item must contain text content");
   }
@@ -178,6 +207,7 @@ export function portAuthorityContextItemToAapiV0(
   });
 }
 
+/** Bind a legacy request to an explicit portable contract and capability version without adding authority evidence. */
 export function aapiV0InvocationToPortAuthority<TInput>(
   invocation: AapiV0Invocation<TInput>,
   portAuthority: PortAuthorityReference,
@@ -196,6 +226,7 @@ export function aapiV0InvocationToPortAuthority<TInput>(
   });
 }
 
+/** Translate one-scope invocations only; reject context or authority references the legacy envelope would lose. */
 export function portAuthorityInvocationToAapiV0(
   invocation: PortAuthorityInvocation,
 ): AapiV0Invocation<JsonValue> {
@@ -221,6 +252,7 @@ export function portAuthorityInvocationToAapiV0(
   });
 }
 
+/** Translate a legacy success and optional provider trace into a checked portable success envelope. */
 export function aapiV0ResultToPortAuthority<TOutput>(
   result: AapiV0Result<TOutput>,
   portAuthority: PortAuthorityReference,
@@ -245,6 +277,7 @@ export function aapiV0ResultToPortAuthority<TOutput>(
   });
 }
 
+/** Translate successful outcomes with at most one compatible trace; reject failures and lossy trace conversions. */
 export function portAuthorityOutcomeToAapiV0(
   outcome: PortAuthorityOutcome,
 ): AapiV0Result<JsonValue> {
@@ -283,10 +316,7 @@ export function portAuthorityOutcomeToAapiV0(
   });
 }
 
+/** Narrow a portable scope kind to the legacy adapter's supported vocabulary. */
 function isAapiV0ScopeKind(value: string): value is AapiV0ScopeKind {
-  return (
-    value === "private" ||
-    value === "project" ||
-    value === "external-resource"
-  );
+  return value === "private" || value === "project" || value === "external-resource";
 }

@@ -2,20 +2,19 @@ import { describe, expect, it } from "vitest";
 import { createDefaultRegistry } from "../src/catalog.js";
 import { sha256, stableStringify } from "../src/core/json.js";
 import {
-  PORT_AUTHORITY_PROTOCOL,
-  definePortAuthority,
-  portAuthorityBody,
-  verifyPortAuthorityIntegrity,
   type AuthorityRequirement,
   type CapabilityDefinition,
+  definePortAuthority,
+  PORT_AUTHORITY_PROTOCOL,
   type PortAuthorityDefinition,
   type PortAuthoritySource,
+  portAuthorityBody,
+  verifyPortAuthorityIntegrity,
 } from "../src/port-authority/definition.js";
 import { portAuthorityFromRegistry } from "../src/profiles/totally-tubular.js";
 
-function sourceFromDefinition(
-  definition: PortAuthorityDefinition,
-): PortAuthoritySource {
+/** Recover authoring fields from a sealed fixture for targeted conformance mutations. */
+function sourceFromDefinition(definition: PortAuthorityDefinition): PortAuthoritySource {
   return {
     name: definition.name,
     version: definition.version,
@@ -33,6 +32,7 @@ function sourceFromDefinition(
   };
 }
 
+/** Replace one fixture capability while preserving the surrounding portable definition. */
 function updateCapability(
   source: PortAuthoritySource,
   update: (capability: CapabilityDefinition) => CapabilityDefinition,
@@ -40,16 +40,13 @@ function updateCapability(
   return {
     ...source,
     capabilities: source.capabilities.map((capability) =>
-      capability.id === "workspace.note.append"
-        ? update(capability)
-        : capability,
+      capability.id === "workspace.note.append" ? update(capability) : capability,
     ),
   };
 }
 
-function reverseAuthority(
-  authority: AuthorityRequirement,
-): AuthorityRequirement {
+/** Reverse requirement order to verify canonical normalization preserves the digest. */
+function reverseAuthority(authority: AuthorityRequirement): AuthorityRequirement {
   if (authority.kind === "none") {
     return { kind: "none" };
   }
@@ -68,34 +65,28 @@ function reverseAuthority(
   };
 }
 
-function reverseCapability(
-  capability: CapabilityDefinition,
-): CapabilityDefinition {
+/** Reverse fixture collections to test stable portable projection ordering. */
+function reverseCapability(capability: CapabilityDefinition): CapabilityDefinition {
   return {
     ...capability,
     errors: [...capability.errors].reverse(),
     targets: [...capability.targets].reverse(),
-    contexts: [...capability.contexts]
-      .reverse()
-      .map((context) => ({
-        ...context,
-        acceptsKindRefs: [...context.acceptsKindRefs].reverse(),
-      })),
+    contexts: [...capability.contexts].reverse().map((context) => ({
+      ...context,
+      acceptsKindRefs: [...context.acceptsKindRefs].reverse(),
+    })),
     authority: reverseAuthority(capability.authority),
-    effects: [...capability.effects]
-      .reverse()
-      .map((effect) => ({
-        ...effect,
-        disclosures: [...effect.disclosures]
-          .reverse()
-          .map((disclosure) => ({
-            ...disclosure,
-            fields: [...disclosure.fields].reverse(),
-          })),
+    effects: [...capability.effects].reverse().map((effect) => ({
+      ...effect,
+      disclosures: [...effect.disclosures].reverse().map((disclosure) => ({
+        ...disclosure,
+        fields: [...disclosure.fields].reverse(),
       })),
+    })),
   };
 }
 
+/** Verify a sealed definition and return its compact identifier, version, and digest reference. */
 function referencePortAuthority(): PortAuthorityDefinition {
   return portAuthorityFromRegistry(createDefaultRegistry());
 }
@@ -114,8 +105,7 @@ describe("Port Authority Protocol v0 conformance", () => {
     }
     expect(capability.version).toBe("1.0.0");
     expect(
-      capability.errors.find((error) => error.code === "APPROVAL_REQUIRED")
-        ?.retryability,
+      capability.errors.find((error) => error.code === "APPROVAL_REQUIRED")?.retryability,
     ).toBe("conditional");
     expect(capability.inputSchema["additionalProperties"]).toBe(false);
     expect(capability.outputSchema["additionalProperties"]).toBe(false);
@@ -180,9 +170,7 @@ describe("Port Authority Protocol v0 conformance", () => {
       recordsOmissions: true,
     });
     expect(
-      portAuthority.authoritySchemes.every(
-        (scheme) => scheme.promptGrantsAuthority === false,
-      ),
+      portAuthority.authoritySchemes.every((scheme) => scheme.promptGrantsAuthority === false),
     ).toBe(true);
     expect(
       portAuthority.lifecycles
@@ -215,22 +203,18 @@ describe("Port Authority Protocol v0 conformance", () => {
       ...source,
       scopeKinds: [...(source.scopeKinds ?? [])].reverse(),
       resourceKinds: [...(source.resourceKinds ?? [])].reverse(),
-      contextKinds: [...(source.contextKinds ?? [])]
-        .reverse()
-        .map((context) => ({
-          ...context,
-          classifications: [...context.classifications].reverse(),
-          disclosurePolicies: [...context.disclosurePolicies].reverse(),
-        })),
+      contextKinds: [...(source.contextKinds ?? [])].reverse().map((context) => ({
+        ...context,
+        classifications: [...context.classifications].reverse(),
+        disclosurePolicies: [...context.disclosurePolicies].reverse(),
+      })),
       authoritySchemes: [...(source.authoritySchemes ?? [])].reverse(),
       effectKinds: [...(source.effectKinds ?? [])].reverse(),
-      lifecycles: [...(source.lifecycles ?? [])]
-        .reverse()
-        .map((lifecycle) => ({
-          ...lifecycle,
-          states: [...lifecycle.states].reverse(),
-          transitions: [...lifecycle.transitions].reverse(),
-        })),
+      lifecycles: [...(source.lifecycles ?? [])].reverse().map((lifecycle) => ({
+        ...lifecycle,
+        states: [...lifecycle.states].reverse(),
+        transitions: [...lifecycle.transitions].reverse(),
+      })),
       capabilities: [...source.capabilities]
         .reverse()
         .map((capability) => reverseCapability(capability)),
@@ -240,9 +224,7 @@ describe("Port Authority Protocol v0 conformance", () => {
     expect(stableStringify(reordered)).toBe(stableStringify(canonical));
     expect(reordered.id).toBe(canonical.id);
     expect(reordered.digest).toBe(canonical.digest);
-    expect(canonical.digest).toBe(
-      sha256(stableStringify(portAuthorityBody(canonical))),
-    );
+    expect(canonical.digest).toBe(sha256(stableStringify(portAuthorityBody(canonical))));
     expect(canonical.id).toBe(`port_authority_${canonical.digest.slice(0, 24)}`);
   });
 
@@ -250,7 +232,9 @@ describe("Port Authority Protocol v0 conformance", () => {
     const canonical = referencePortAuthority();
     const source = sourceFromDefinition(canonical);
     const mutations: readonly {
+      /** Human-readable regression case label, independent of contract identifiers. */
       readonly name: string;
+      /** Fixture transformation introducing exactly the inconsistency checked by the case. */
       readonly mutate: (input: PortAuthoritySource) => PortAuthoritySource;
     }[] = [
       {
@@ -318,9 +302,7 @@ describe("Port Authority Protocol v0 conformance", () => {
   it("detects post-definition tampering", () => {
     const portAuthority = referencePortAuthority();
     expect(verifyPortAuthorityIntegrity(portAuthority)).toBe(true);
-    expect(
-      verifyPortAuthorityIntegrity({ ...portAuthority, title: "Tampered title" }),
-    ).toBe(false);
+    expect(verifyPortAuthorityIntegrity({ ...portAuthority, title: "Tampered title" })).toBe(false);
     expect(
       verifyPortAuthorityIntegrity({
         ...portAuthority,
@@ -411,8 +393,11 @@ describe("Port Authority Protocol v0 conformance", () => {
   it("rejects unknown semantic references", () => {
     const source = sourceFromDefinition(referencePortAuthority());
     const unknownReferences: readonly {
+      /** Human-readable regression case label, independent of contract identifiers. */
       readonly name: string;
+      /** Portable authoring fixture supplied to the conformance assertion. */
       readonly source: PortAuthoritySource;
+      /** Expected diagnostic text for the deliberately malformed fixture. */
       readonly message: string;
     }[] = [
       {
@@ -493,10 +478,7 @@ describe("Port Authority Protocol v0 conformance", () => {
     ];
 
     for (const unknown of unknownReferences) {
-      expect(
-        () => definePortAuthority(unknown.source),
-        unknown.name,
-      ).toThrow(unknown.message);
+      expect(() => definePortAuthority(unknown.source), unknown.name).toThrow(unknown.message);
     }
   });
 

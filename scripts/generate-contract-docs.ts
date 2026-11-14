@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createDefaultPortAuthority } from "../src/catalog.js";
 import { stablePrettyStringify } from "../src/core/json.js";
 import { compileSecondService } from "../src/second-service/compiler.js";
@@ -23,7 +23,8 @@ const artifacts = [
 for (const [name, content] of artifacts) {
   const serialized = `${stablePrettyStringify(content)}\n`;
   if (check) {
-    if (await readFile(resolve(outputDirectory, name), "utf8") !== serialized) throw new Error(`Generated documentation is out of date: ${name}`);
+    if ((await readFile(resolve(outputDirectory, name), "utf8")) !== serialized)
+      throw new Error(`Generated documentation is out of date: ${name}`);
     continue;
   }
   await writeFile(resolve(outputDirectory, name), serialized, {
@@ -32,4 +33,6 @@ for (const [name, content] of artifacts) {
   });
 }
 
-process.stdout.write(`${check ? "Verified" : "Generated"} ${artifacts.length} contract artifacts in ${outputDirectory}\n`);
+process.stdout.write(
+  `${check ? "Verified" : "Generated"} ${artifacts.length} contract artifacts in ${outputDirectory}\n`,
+);

@@ -1,22 +1,32 @@
 import type { JsonObject, JsonValue } from "../core/json.js";
+import { runtimeContractSchemas } from "../generated/runtime-contracts.js";
 import type { ToolDescriptor } from "../typed-tools/index.js";
 
 /** The minimum surface needed by a contract projection. */
 export interface ToolCatalog {
+  /** Return canonical descriptors for discovery; projections copy them rather than mutating runtime state. */
   list(): readonly ToolDescriptor[];
 }
 
+/** Optional capability-manifest display identity; defaults are tubular and 0.1.0. */
 export interface ManifestOptions {
+  /** Capability-manifest display name; defaults to tubular. */
   readonly name?: string;
+  /** Explicit contract or component version; callers should not infer compatibility from matching names alone. */
   readonly version?: string;
 }
 
+/** Required OpenAPI information metadata for documentation-only HTTP-shaped paths. */
 export interface OpenApiOptions {
+  /** Short human-readable display title; identifiers remain the stable integration keys. */
   readonly title: string;
+  /** Explicit contract or component version; callers should not infer compatibility from matching names alone. */
   readonly version: string;
+  /** Human-readable semantics exposed in discovery; descriptive text does not enforce runtime policy. */
   readonly description?: string;
 }
 
+/** Sort descriptors by name and reject empty or duplicate names before generating deterministic projections. */
 function orderedTools(catalog: ToolCatalog): readonly ToolDescriptor[] {
   const tools = [...catalog.list()].sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
@@ -41,16 +51,23 @@ export function projectCapabilityManifest(
   catalog: ToolCatalog,
   options: ManifestOptions = {},
 ): JsonObject {
-  const tools = orderedTools(catalog).map((tool): JsonObject => ({
-    name: tool.name,
-    description: tool.description,
-    effect: tool.effect,
-    inputSchema: structuredClone(tool.inputSchema),
-    outputSchema: structuredClone(tool.outputSchema),
-    ...(tool.provenance === undefined ? {} : { provenance: { ...tool.provenance } }),
-    ...(tool.approval === undefined ? {} : { approval: tool.approval }),
-    ...(tool.execution === undefined ? {} : { execution: tool.execution }),
-  }));
+  const tools = orderedTools(catalog).map(
+    (tool): JsonObject => ({
+      name: tool.name,
+      description: tool.description,
+      effect: tool.effect,
+      inputSchema: structuredClone(tool.inputSchema),
+      outputSchema: structuredClone(tool.outputSchema),
+      ...(tool.title === undefined ? {} : { title: tool.title }),
+      ...(tool.deprecated === undefined ? {} : { deprecated: tool.deprecated }),
+      ...(tool.resultDescription === undefined
+        ? {}
+        : { resultDescription: tool.resultDescription }),
+      ...(tool.provenance === undefined ? {} : { provenance: { ...tool.provenance } }),
+      ...(tool.approval === undefined ? {} : { approval: tool.approval }),
+      ...(tool.execution === undefined ? {} : { execution: tool.execution }),
+    }),
+  );
   return {
     formatVersion: "0.1.0",
     name: options.name ?? "tubular",
@@ -68,7 +85,9 @@ export function projectTypedOpenApi(catalog: ToolCatalog, options: OpenApiOption
     throw new TypeError("OpenAPI title and version are required");
   }
   const paths: Record<string, JsonValue> = {};
-  const schemas: Record<string, JsonValue> = {};
+  const schemas: Record<string, JsonValue> = {
+    ToolInputValidationFailure: structuredClone(runtimeContractSchemas.ToolInputValidationFailure),
+  };
   orderedTools(catalog).forEach((tool, index) => {
     const inputKey = `Tool${index}Input`;
     const outputKey = `Tool${index}Output`;
@@ -89,6 +108,8 @@ export function projectTypedOpenApi(catalog: ToolCatalog, options: OpenApiOption
         "x-network-endpoint": false,
         operationId: tool.name,
         description: tool.description,
+        ...(tool.title === undefined ? {} : { summary: tool.title }),
+        ...(tool.deprecated === undefined ? {} : { deprecated: tool.deprecated }),
         "x-tubular-effect": tool.effect,
         ...(tool.approval === undefined ? {} : { "x-tubular-approval": tool.approval }),
         ...(tool.execution === undefined ? {} : { "x-tubular-execution": tool.execution }),
@@ -99,8 +120,23 @@ export function projectTypedOpenApi(catalog: ToolCatalog, options: OpenApiOption
         },
         responses: {
           "200": {
-            description: "Successful result",
-            content: { "application/json": { schema: { $ref: `#/components/schemas/${outputKey}` } } },
+            description: tool.resultDescription ?? "Successful result",
+            content: {
+              "application/json": { schema: { $ref: `#/components/schemas/${outputKey}` } },
+            },
+          },
+          "422": {
+            description:
+              "Projection of input validation failure before dispatch. A future HTTP host must implement this mapping.",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ToolInputValidationFailure" },
+              },
+            },
+          },
+          default: {
+            description:
+              "Approval, policy, and execution failures require a host-defined HTTP mapping. No HTTP error endpoint or automatic retry behavior is implemented.",
           },
         },
       },

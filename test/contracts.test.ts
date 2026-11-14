@@ -1,16 +1,22 @@
+import { Ajv2020 } from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 import { appendNoteContract } from "../src/builtin/append-note.js";
 import { ContractRegistry } from "../src/contracts/registry.js";
-import { defineToolContract } from "../src/contracts/tool-contract.js";
 import type { RuntimeSchema } from "../src/contracts/schema.js";
-import type { JsonObject } from "../src/core/json.js";
+import { defineToolContract } from "../src/contracts/tool-contract.js";
+import { isJsonObject, type JsonObject } from "../src/core/json.js";
 
 describe("canonical contract registry", () => {
+  it("uses the published Unicode code-point limit for the legacy append parser", () => {
+    const validate = new Ajv2020().compile(appendNoteContract.inputSchema);
+    for (const text of ["😀".repeat(4000), "😀".repeat(4001), " ", "a"]) {
+      const input = { resource: "workspace://test/note", text };
+      expect(appendNoteContract.validateInput(input).ok).toBe(validate(input));
+    }
+  });
   it("rejects hand-built and shallow-cloned contracts", () => {
     const registry = new ContractRegistry();
-    expect(() => registry.register({ ...appendNoteContract })).toThrow(
-      "defineToolContract",
-    );
+    expect(() => registry.register({ ...appendNoteContract })).toThrow("defineToolContract");
     expect(() =>
       registry.register({
         ...appendNoteContract,
@@ -23,14 +29,13 @@ describe("canonical contract registry", () => {
   it("accepts a contract produced by the only factory", () => {
     const passthrough: RuntimeSchema<JsonObject> = {
       jsonSchema: { type: "object" },
+      /** Return the supplied JSON to test whether later caller mutation can alter the sealed contract. */
       parse(input: unknown) {
-        return typeof input === "object" && input !== null && !Array.isArray(input)
-          ? { ok: true as const, value: input as JsonObject }
+        return isJsonObject(input)
+          ? { ok: true as const, value: input }
           : {
               ok: false as const,
-              issues: [
-                { path: "/", code: "type", message: "Expected an object" },
-              ],
+              issues: [{ path: "/", code: "type", message: "Expected an object" }],
             };
       },
     };

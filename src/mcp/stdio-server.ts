@@ -1,9 +1,9 @@
 import { StdioServerTransport, serveStdio } from "@modelcontextprotocol/server/stdio";
 import { issueAuthorityLease } from "../authority/types.js";
 import { createDefaultRegistry } from "../catalog.js";
-import { portAuthorityFromRegistry } from "../profiles/totally-tubular.js";
-import { SystemClock } from "../core/time.js";
 import { buildContextManifest } from "../context/manifest.js";
+import { SystemClock } from "../core/time.js";
+import { portAuthorityFromRegistry } from "../profiles/totally-tubular.js";
 import {
   ContextRegistrationAuthority,
   LeaseIssuerAuthority,
@@ -12,6 +12,7 @@ import {
 import { ProposalOnlyGateway } from "./gateway.js";
 import { buildMcpServer } from "./server.js";
 
+/** Launch the local demonstration MCP stdio server with an explicit trusted host binding. */
 function start(): void {
   const clock = new SystemClock();
   const registry = createDefaultRegistry();

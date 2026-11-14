@@ -6,17 +6,32 @@ const binding0 = bindTool(handler0, {
     "type": "object",
     "properties": {
       "resource": {
-        "type": "string"
+        "type": "string",
+        "description": "Canonical logical workspace URI selected for the operation; it does not grant filesystem access."
       },
       "text": {
-        "type": "string"
+        "type": "string",
+        "description": "Text to append as one entry; whitespace-only text is rejected before dispatch.",
+        "minLength": 1,
+        "maxLength": 4000,
+        "pattern": "\\S",
+        "examples": [
+          "Review the selected context before approving."
+        ]
       }
     },
     "required": [
       "resource",
       "text"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "description": "Arguments for an ephemeral governed append; the trusted runtime supplies authority and selected context separately.",
+    "examples": [
+      {
+        "resource": "workspace://notes/one",
+        "text": "Reviewed the selected context."
+      }
+    ]
   },
   "outputSchema": {
     "type": "object",
@@ -25,16 +40,19 @@ const binding0 = bindTool(handler0, {
         "type": "array",
         "items": {
           "type": "string"
-        }
+        },
+        "description": "Ordered note entries after the append; replaying the same operation returns its prior snapshot."
       },
       "resource": {
-        "type": "string"
+        "type": "string",
+        "description": "Canonical logical workspace URI selected for the operation; it does not grant filesystem access."
       },
       "selectedSourceIds": {
         "type": "array",
         "items": {
           "type": "string"
-        }
+        },
+        "description": "Source identifiers that the host selected for this operation; omitted sources never reach the handler."
       }
     },
     "required": [
@@ -42,11 +60,17 @@ const binding0 = bindTool(handler0, {
       "resource",
       "selectedSourceIds"
     ],
-    "additionalProperties": false
+    "additionalProperties": false,
+    "description": "Snapshot of the in-memory note after this operation, plus source identities from the host-selected context."
+  },
+  "documentation": {
+    "description": "Append one note entry using the trusted operation identity for in-process deduplication.",
+    "title": "Append a governed note",
+    "resultDescription": "The note entries after this append and the exact selected context source identifiers."
   }
 }, {
   "entry": "tools.ts",
   "exportName": "appendNote",
-  "sourceDigest": "7c2e41b63dd8ee89b0627ae1d0b93ba04cd1bb47544dace7b1ccd0343c47c7c5"
+  "sourceDigest": "e95c2d7d3c67bbd3eab854027c78bc100f4986ce8cdd283ef2cd878d8e09bc34"
 });
 export { binding0 as "appendNote" };

@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-  createHandoffEnvelope,
-  verifyHandoffEnvelopeIntegrity,
-} from "../src/context/handoff.js";
+import { createHandoffEnvelope, verifyHandoffEnvelopeIntegrity } from "../src/context/handoff.js";
 import {
   buildContextManifest,
   CONTEXT_LIMITS,
-  verifyContextManifestIntegrity,
   type ContextSource,
+  verifyContextManifestIntegrity,
 } from "../src/context/manifest.js";
 import { TestClock } from "./support.js";
 
@@ -195,9 +192,7 @@ describe("context manifests", () => {
     expect(JSON.stringify(handoff)).toContain("hello");
     expect(handoff.digest).toMatch(/^[a-f0-9]{64}$/);
     expect(verifyHandoffEnvelopeIntegrity(handoff)).toBe(true);
-    expect(
-      verifyHandoffEnvelopeIntegrity({ ...handoff, objective: "tampered" }),
-    ).toBe(false);
+    expect(verifyHandoffEnvelopeIntegrity({ ...handoff, objective: "tampered" })).toBe(false);
   });
 
   it("refuses to transmit local-only context in a handoff", () => {

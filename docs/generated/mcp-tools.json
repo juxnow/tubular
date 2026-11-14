@@ -233,7 +233,7 @@
         "properties": {
           "proposalId": {
             "description": "Proposal identifier returned by a tt.propose.* tool",
-            "pattern": "^proposal_[a-f0-9]{24}$",
+            "pattern": "^proposal_[A-Za-z0-9_-]{1,64}_[1-9][0-9]*$",
             "type": "string"
           }
         },

@@ -1,4 +1,8 @@
-# Tubular
+<p align="center">
+  <img src="assets/brand/logo/tubular-logo-960.png" alt="Tubular" width="480">
+</p>
+
+# Tubular.... toatally ✌︎㋡ ∛
 
 **TypeScript-first building blocks for agentic application programming interfaces.** Declare a tool's input, output and implementation in TypeScript. Tubular derives machine-readable schemas, validates calls against those schemas, and exposes the same capabilities to MCP clients. The schemas are contracts that software can consume, not just documentation.
 
@@ -19,28 +23,48 @@ The hello example retains the original read-only API. The governed example gener
 ## Declare a capability
 
 ```ts
+/** Case-insensitive search inside the host-selected workspace. */
 export interface ProjectQuery {
-  /** Words to match in a project name. */
+  /**
+   * Substring to find within a project name.
+   * @minLength 1
+   * @maxLength 100
+   * @example "tubular"
+   */
   query: string;
+  /**
+   * Maximum matches. The handler uses 10 when omitted.
+   * @isInt
+   * @minimum 1
+   * @maximum 100
+   * @default 10
+   */
   limit?: number;
 }
 
+/** Matching names in the host's original order. */
 export interface ProjectMatches {
+  /** An empty list is a successful search with no matches. */
   projects: string[];
 }
 
+/** Trusted selection supplied separately from model arguments. */
 export interface WorkspaceContext {
+  /** Names the host has authorized this session to inspect. */
   projects: readonly string[];
 }
 
-/** @tubular */
-export function findProjects(
-  input: ProjectQuery,
-  context: WorkspaceContext,
-): ProjectMatches {
+/**
+ * Find projects in the selected workspace without fetching additional context.
+ * @tubular
+ * @summary Find projects
+ * @example {"query":"tubular","limit":5}
+ * @returns Matching project names, capped by the requested limit.
+ */
+export function findProjects(input: ProjectQuery, context: WorkspaceContext): ProjectMatches {
   return {
     projects: context.projects
-      .filter(name => name.toLowerCase().includes(input.query.toLowerCase()))
+      .filter((name) => name.toLowerCase().includes(input.query.toLowerCase()))
       .slice(0, input.limit ?? 10),
   };
 }
@@ -55,6 +79,8 @@ npx tubular generate --project tsconfig.json --entry src/tools.ts --out generate
 Use `--functions findProjects,otherTool` to select named exported functions explicitly instead of using `@tubular`. The first argument becomes the model-facing input schema; the return type, including an awaited `Promise`, becomes the output schema. An optional second argument belongs to the trusted host and is never part of the input schema.
 
 The compiler supports closed objects, structural object intersections, required and optional properties, mutable and readonly arrays, JSON primitives, literal types, and unions of supported types. Unsupported constructs, such as recursive types, `any`, index signatures, tuples, primitive brands, and explicit function `this` parameters, fail compilation. Tool inputs must have a top-level object schema. MCP outputs may be objects or unions containing only object alternatives. The compiler checks the TypeScript project before generating and requires `strictNullChecks` (or `strict`). These are JSON contracts: optional properties may be omitted, but explicit JavaScript `undefined` is not JSON.
+
+Source interface/property descriptions, examples, defaults, and supported constraints flow into schemas. Function prose and summary flow into capability discovery and native MCP/OpenAPI metadata. Numeric bounds, integer assertions, string/array bounds, patterns, and UUID format are enforced by the runtime. Defaults are documentation only. Unsupported tags, invalid examples, and ambiguous inherited or intersection annotations fail clearly. See the [source contract guide](docs/SOURCE_CONTRACTS.md) for the exact vocabulary and limitations.
 
 Use the same command with `--check` in CI to fail when checked-in generated schemas have drifted from the TypeScript source.
 
@@ -71,11 +97,12 @@ import { createToolRuntime } from "@juxnow/tubular";
 import { findProjects } from "../generated/tools.js";
 
 const runtime = createToolRuntime({
-  definitions: [findProjects({
-    name: "projects.find",
-    description: "Find projects in the selected workspace.",
-    effect: "read",
-  })],
+  definitions: [
+    findProjects({
+      name: "projects.find",
+      effect: "read",
+    }),
+  ],
   authorize: ({ tool, context }) =>
     tool.effect === "read" && context.projects.length > 0 ? "ALLOW" : "DENY",
 });
@@ -97,6 +124,8 @@ The host registers issuer, context-registration, and approval authority objects 
 `invoke` offers adapter convenience: an approval-required proposal returns `ask` with a proposal ID and digest, and an approval-free proposal executes through the same kernel. Only the host control surface can approve or resume. Keep the runtime's raw kernel and authority objects out of model access.
 
 The current integration enforces canonical workspace resource scopes. State, deduplication, approvals, and audit are in memory. Restart recovery, authenticated human review, generalized resource policies, and durable effect reconciliation are unfinished. Do not infer those properties from a passing demo.
+
+Every independent proposal receives a new identity, even for identical arguments and timestamps. Its digest includes that identity, so approval cannot transfer to another submission. Re-executing the same proposal returns its receipt without redispatch; concurrent executions share one dispatch. The default namespace is random per kernel, with a host-controlled deterministic namespace for tests. This provides no cross-process replay store.
 
 For MCP, bind the same runtime and a trusted session context:
 
@@ -129,6 +158,6 @@ For the governed runtime, pass an opaque session as the MCP context. The MCP ada
 - Capability manifest and OpenAPI 3.1 contract projections from the same runtime descriptors. The OpenAPI document does not itself run an HTTP server.
 - The earlier experimental protocol vocabulary, proposal-only gateway and projections, plus the kernel now reused by the governed typed path. See [the prototype notes](docs/LEGACY_PROTOTYPE.md) and [trust model](docs/TRUST_MODEL.md).
 
-`npm run check` verifies generated documentation without rewriting it, typechecks and builds the library, runs tests, checks generated example bindings, runs the governed example, and tests the packed package in an isolated consumer directory. That offline consumer uses the installed dependency versions; it is not a fresh dependency-resolution or cross-platform compatibility claim.
+`npm run check` runs Biome, engineering-rule and source-documentation checks, verifies generated artifacts without rewriting them, validates OpenAPI 3.1 and embedded JSON Schema, typechecks and builds, runs tests, checks generated example bindings, executes the governed example, and tests the packed package in an isolated consumer directory. That offline consumer uses the installed dependency versions; it is not a fresh dependency-resolution or cross-platform compatibility claim.
 
 This is a first implementation, not a claim that every part of the broader AAPI, MCCP, context-plane and multi-provider vision is finished. The package is marked private pending a release and licensing decision. This build has not been published.

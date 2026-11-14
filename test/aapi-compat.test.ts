@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  type AapiV0ContextItem,
+  type AapiV0Invocation,
+  type AapiV0Principal,
+  type AapiV0Result,
+  type AapiV0Scope,
+  type AapiV0SourceReference,
   aapiV0ContextItemToPortAuthority,
   aapiV0InvocationToPortAuthority,
   aapiV0PrincipalToPortAuthority,
@@ -12,12 +18,6 @@ import {
   portAuthorityPrincipalToAapiV0,
   portAuthorityScopeToAapiV0,
   portAuthoritySourceToAapiV0,
-  type AapiV0ContextItem,
-  type AapiV0Invocation,
-  type AapiV0Principal,
-  type AapiV0Result,
-  type AapiV0Scope,
-  type AapiV0SourceReference,
 } from "../src/port-authority/aapi-v0.js";
 import {
   PORT_AUTHORITY_PROTOCOL,
@@ -83,20 +83,14 @@ describe("AAPI v0 clean-room compatibility", () => {
       },
     };
 
-    expect(
-      portAuthorityPrincipalToAapiV0(aapiV0PrincipalToPortAuthority(principal)),
-    ).toEqual(principal);
-    expect(
-      portAuthorityScopeToAapiV0(aapiV0ScopeToPortAuthority(scope)),
-    ).toEqual(scope);
-    expect(
-      portAuthoritySourceToAapiV0(aapiV0SourceToPortAuthority(source)),
-    ).toEqual(source);
-    expect(
-      portAuthorityContextItemToAapiV0(
-        aapiV0ContextItemToPortAuthority(contextItem),
-      ),
-    ).toEqual(contextItem);
+    expect(portAuthorityPrincipalToAapiV0(aapiV0PrincipalToPortAuthority(principal))).toEqual(
+      principal,
+    );
+    expect(portAuthorityScopeToAapiV0(aapiV0ScopeToPortAuthority(scope))).toEqual(scope);
+    expect(portAuthoritySourceToAapiV0(aapiV0SourceToPortAuthority(source))).toEqual(source);
+    expect(portAuthorityContextItemToAapiV0(aapiV0ContextItemToPortAuthority(contextItem))).toEqual(
+      contextItem,
+    );
   });
 
   it("preserves omission of an optional parent resource id", () => {
@@ -106,17 +100,18 @@ describe("AAPI v0 clean-room compatibility", () => {
       resourceId: "direct-message-channel",
     };
 
-    const roundTrip = portAuthoritySourceToAapiV0(
-      aapiV0SourceToPortAuthority(parentless),
-    );
+    const roundTrip = portAuthoritySourceToAapiV0(aapiV0SourceToPortAuthority(parentless));
     expect(roundTrip).toEqual(parentless);
     expect("parentResourceId" in roundTrip).toBe(false);
   });
 
   it("round-trips an invocation with nested JSON input", () => {
     const invocation: AapiV0Invocation<{
+      /** Fixture audience retained as capability input during legacy-to-portable translation. */
       readonly audience: string;
+      /** Nonempty task objective retained verbatim as context, never interpreted as an authority grant. */
       readonly objective: string;
+      /** Fixture context records whose attribution and provenance must survive translation. */
       readonly items: readonly AapiV0ContextItem[];
     }> = {
       correlationId: "correlation-1",
@@ -143,11 +138,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       source,
     };
 
-    const encoded = aapiV0InvocationToPortAuthority(
-      invocation,
-      portAuthority,
-      "1.0.0",
-    );
+    const encoded = aapiV0InvocationToPortAuthority(invocation, portAuthority, "1.0.0");
     expect(encoded.protocol).toBe("port-authority.invocation/v0");
     expect(encoded.portAuthority).toEqual(portAuthority);
     expect(encoded.capability).toEqual({
@@ -159,7 +150,9 @@ describe("AAPI v0 clean-room compatibility", () => {
 
   it("represents providerRequestId only as an opaque trace", () => {
     const result: AapiV0Result<{
+      /** Fixture success summary expected to survive round-trip translation. */
       readonly headline: string;
+      /** Fixture decision strings retained in successful portable output. */
       readonly decisions: readonly string[];
     }> = {
       correlationId: "correlation-1",
@@ -168,11 +161,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       providerRequestId: "req_test",
     };
 
-    const encoded = aapiV0ResultToPortAuthority(
-      result,
-      portAuthority,
-      "1.0.0",
-    );
+    const encoded = aapiV0ResultToPortAuthority(result, portAuthority, "1.0.0");
     expect(encoded.protocol).toBe("port-authority.outcome/v0");
     expect(encoded.portAuthority).toEqual(portAuthority);
     expect("providerRequestId" in encoded).toBe(false);
@@ -210,9 +199,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       source,
     };
 
-    expect(() =>
-      aapiV0InvocationToPortAuthority(invocation, portAuthority, "1.0.0"),
-    ).toThrow(
+    expect(() => aapiV0InvocationToPortAuthority(invocation, portAuthority, "1.0.0")).toThrow(
       /Invocation input must be JSON-safe/u,
     );
   });
@@ -223,7 +210,10 @@ describe("AAPI v0 clean-room compatibility", () => {
       capability: "activity.summarize",
       output: Number.POSITIVE_INFINITY,
     };
-    const circular: { self?: unknown } = {};
+    const circular: {
+      /** Deliberately cyclic fixture link used to prove JSON boundary rejection. */
+      self?: unknown;
+    } = {};
     circular.self = circular;
     const circularResult: AapiV0Result<unknown> = {
       correlationId: "correlation-5",
@@ -231,14 +221,10 @@ describe("AAPI v0 clean-room compatibility", () => {
       output: circular,
     };
 
-    expect(() =>
-      aapiV0ResultToPortAuthority(invalidResult, portAuthority, "1.0.0"),
-    ).toThrow(
+    expect(() => aapiV0ResultToPortAuthority(invalidResult, portAuthority, "1.0.0")).toThrow(
       /finite numbers/u,
     );
-    expect(() =>
-      aapiV0ResultToPortAuthority(circularResult, portAuthority, "1.0.0"),
-    ).toThrow(
+    expect(() => aapiV0ResultToPortAuthority(circularResult, portAuthority, "1.0.0")).toThrow(
       /circular reference/u,
     );
   });

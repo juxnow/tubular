@@ -1,19 +1,27 @@
-import { sha256, stableStringify, type JsonObject } from "../core/json.js";
-import { parseInstant, type Clock } from "../core/time.js";
 import type { ContextManifest } from "../context/manifest.js";
 import { effectAtMost, type RegisteredToolContract } from "../contracts/tool-contract.js";
+import { type JsonObject, sha256, stableStringify } from "../core/json.js";
+import { type Clock, parseInstant } from "../core/time.js";
 import { workspaceResourceMatches } from "./resource.js";
 import type { ActionProposal, AuthorityLease, PolicyDecision } from "./types.js";
 
+/** Sealed proposal, contract, context, and current lease state supplied by the trusted kernel. */
 export interface PolicyEvaluationRequest {
+  /** Immutable validated action and exact context binding retained by the kernel. */
   readonly proposal: ActionProposal;
+  /** Canonical registered contract supplying effect, validation, and approval semantics for this proposal. */
   readonly contract: RegisteredToolContract;
+  /** Host-issued scoped authority data, verified and sealed before registration. */
   readonly lease: AuthorityLease;
+  /** Explicit immutable context snapshot used for this action; registration and lease binding remain required. */
   readonly manifest: ContextManifest;
+  /** Number of dispatches already reserved against this lease in the current kernel. */
   readonly leaseUses: number;
+  /** Whether the kernel has revoked this lease before the current policy evaluation. */
   readonly leaseRevoked: boolean;
 }
 
+/** Bind a policy outcome and explanation to the proposal digest and evaluation time. */
 function makeDecision(
   proposal: ActionProposal,
   outcome: PolicyDecision["outcome"],
@@ -46,13 +54,17 @@ function makeDecision(
   };
 }
 
+/** Deterministic lease policy evaluator. It never executes effects or grants human approval. */
 export class PolicyEngine {
+  /** Injected time source shared by this component's timestamp and expiry decisions. */
   readonly #clock: Clock;
 
+  /** Capture the trusted clock; evaluation does not mutate lease state. */
   constructor(clock: Clock) {
     this.#clock = clock;
   }
 
+  /** Evaluate identity, revocation, expiry, budget, effect, resource, context, and approval requirements in order. */
   evaluate(request: PolicyEvaluationRequest): PolicyDecision {
     const evaluatedAt = this.#clock.now().toISOString();
     const now = parseInstant(evaluatedAt, "policy evaluation time");
@@ -130,9 +142,7 @@ export class PolicyEngine {
       );
     }
 
-    const localOnlySource = request.manifest.items.find(
-      (item) => item.disclosure === "local-only",
-    );
+    const localOnlySource = request.manifest.items.find((item) => item.disclosure === "local-only");
     if (localOnlySource !== undefined) {
       return makeDecision(
         request.proposal,

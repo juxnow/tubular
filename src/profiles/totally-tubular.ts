@@ -1,12 +1,8 @@
 import type { ContractRegistry } from "../contracts/registry.js";
-import {
-  definePortAuthority,
-  type PortAuthorityDefinition,
-} from "../port-authority/definition.js";
+import { definePortAuthority, type PortAuthorityDefinition } from "../port-authority/definition.js";
 
-export function portAuthorityFromRegistry(
-  registry: ContractRegistry,
-): PortAuthorityDefinition {
+/** Derive the experimental portable application definition from canonical registered kernel contracts. */
+export function portAuthorityFromRegistry(registry: ContractRegistry): PortAuthorityDefinition {
   return definePortAuthority({
     name: "totally-tubular.reference-runtime",
     version: "0.1.0",

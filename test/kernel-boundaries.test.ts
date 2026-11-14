@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { issueAuthorityLease } from "../src/authority/types.js";
-import { ContractRegistry } from "../src/contracts/registry.js";
-import { defineToolContract } from "../src/contracts/tool-contract.js";
-import type { RuntimeSchema } from "../src/contracts/schema.js";
-import { isJsonObject, type JsonObject } from "../src/core/json.js";
 import { buildContextManifest } from "../src/context/manifest.js";
+import { ContractRegistry } from "../src/contracts/registry.js";
+import type { RuntimeSchema } from "../src/contracts/schema.js";
+import { defineToolContract } from "../src/contracts/tool-contract.js";
+import { isJsonObject, type JsonObject } from "../src/core/json.js";
 import {
   ContextRegistrationAuthority,
   LeaseIssuerAuthority,
@@ -14,6 +14,7 @@ import { TestClock } from "./support.js";
 
 const outputSchema: RuntimeSchema<JsonObject> = {
   jsonSchema: { type: "object" },
+  /** Test parser whose behavior exercises the kernel's schema and detached-input boundary. */
   parse(input: unknown) {
     return isJsonObject(input)
       ? { ok: true, value: input }
@@ -58,11 +59,15 @@ const readPortableSemantics = {
   lifecycleRef: "proposal-execution",
 };
 
+/** Create an isolated kernel and explicit host bindings for an adversarial contract fixture. */
 function kernelForContract(
   contract: ReturnType<typeof defineToolContract<JsonObject, JsonObject>>,
 ): {
+  /** In-process trusted execution boundary; possession exposes host operations and must not be given to a model. */
   readonly kernel: TotallyTubularKernel;
+  /** Identifier of the host-registered authority lease evaluated for this action. */
   readonly leaseId: string;
+  /** Registered context fixture identity used in subsequent proposal requests. */
   readonly manifestId: string;
 } {
   const clock = new TestClock("2026-09-13T16:00:00.000Z");
@@ -113,10 +118,8 @@ function kernelForContract(
   return { kernel, leaseId: lease.id, manifestId: manifest.id };
 }
 
-function requestFor(
-  fixture: ReturnType<typeof kernelForContract>,
-  toolName: string,
-) {
+/** Build a request from the fixture's trusted bindings and untrusted test arguments. */
+function requestFor(fixture: ReturnType<typeof kernelForContract>, toolName: string) {
   return {
     principalId: "agent.boundary",
     leaseId: fixture.leaseId,
@@ -130,6 +133,7 @@ describe("untrusted contract failure boundaries", () => {
   it("turns a throwing input parser into a sanitized structured failure", () => {
     const inputSchema: RuntimeSchema<JsonObject> = {
       jsonSchema: { type: "object" },
+      /** Test parser whose behavior exercises the kernel's schema and detached-input boundary. */
       parse() {
         throw new Error("secret-validator-detail");
       },
@@ -154,14 +158,13 @@ describe("untrusted contract failure boundaries", () => {
       failure: { code: "INPUT_INVALID", retryable: false },
     });
     expect(JSON.stringify(result)).not.toContain("secret-validator-detail");
-    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain(
-      "secret-parser-sentinel",
-    );
+    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain("secret-parser-sentinel");
   });
 
   it("turns a throwing resource resolver into a sanitized structured failure", () => {
     const inputSchema: RuntimeSchema<JsonObject> = {
       jsonSchema: { type: "object" },
+      /** Test parser whose behavior exercises the kernel's schema and detached-input boundary. */
       parse(input: unknown) {
         return isJsonObject(input)
           ? { ok: true, value: input }
@@ -182,6 +185,7 @@ describe("untrusted contract failure boundaries", () => {
       output: outputSchema,
       errors: [],
       semantics: readPortableSemantics,
+      /** Resolve the already validated target resource without creating or widening authority. */
       resolveResource() {
         throw new Error("secret-resolver-detail");
       },
@@ -193,8 +197,6 @@ describe("untrusted contract failure boundaries", () => {
       failure: { code: "INPUT_INVALID", retryable: false },
     });
     expect(JSON.stringify(result)).not.toContain("secret-resolver-detail");
-    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain(
-      "secret-parser-sentinel",
-    );
+    expect(JSON.stringify(fixture.kernel.audit.entries())).not.toContain("secret-parser-sentinel");
   });
 });

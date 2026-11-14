@@ -1,82 +1,117 @@
+import { randomUUID } from "node:crypto";
 import type { AuditEvent, AuditReader } from "../audit/audit-log.js";
 import { AuditLog } from "../audit/audit-log.js";
 import { PolicyEngine } from "../authority/policy.js";
 import {
-  approvalChallengeToJson,
-  authorityLeaseToJson,
-  executionReceiptToJson,
-  humanApprovalToJson,
-  policyDecisionToJson,
-  sealAuthorityLease,
   type ActionProposal,
   type ActionRequest,
   type ApprovalChallenge,
   type AuthorityLease,
+  approvalChallengeToJson,
+  authorityLeaseToJson,
   type ExecutionReceipt,
+  executionReceiptToJson,
   type HumanApproval,
+  humanApprovalToJson,
   type PolicyDecision,
+  policyDecisionToJson,
+  sealAuthorityLease,
 } from "../authority/types.js";
-import { kernelFailure, type KernelFailure } from "../core/errors.js";
+import type { ContextManifest } from "../context/manifest.js";
+import { manifestSourceIds, sealContextManifest } from "../context/manifest.js";
+import type { ContractRegistry } from "../contracts/registry.js";
+import type { RegisteredToolContract } from "../contracts/tool-contract.js";
+import { type KernelFailure, kernelFailure } from "../core/errors.js";
 import {
   deepFreezeJson,
   deepFreezeJsonObject,
-  sha256,
-  stableStringify,
   type JsonObject,
   type JsonValue,
+  sha256,
+  stableStringify,
 } from "../core/json.js";
-import { parseInstant, type Clock } from "../core/time.js";
-import type { ContractRegistry } from "../contracts/registry.js";
-import type { RegisteredToolContract } from "../contracts/tool-contract.js";
-import type { ContextManifest } from "../context/manifest.js";
-import { manifestSourceIds, sealContextManifest } from "../context/manifest.js";
+import { type Clock, parseInstant } from "../core/time.js";
 
+/** Trusted dispatch metadata carrying the sealed proposal, idempotency key, and cooperative cancellation signal. */
 export interface ExecutorContext {
+  /** Immutable validated action and exact context binding retained by the kernel. */
   readonly proposal: ActionProposal;
+  /** Proposal identity passed to the executor as its idempotency key; reuse must not repeat the effect. */
   readonly operationId: string;
+  /** Cooperative cancellation signal. Aborting does not prove that an already dispatched effect was rolled back. */
   readonly signal: AbortSignal;
 }
 
+/** Host-installed effect adapter. It must honor proposal-id deduplication when talking to an external system. */
 export interface ToolExecutor {
+  /** Exact registered tool name; policy grants match this identifier without aliases. */
   readonly toolName: string;
+  /** Required proposal-id deduplication promise; external adapters must substantiate it beyond the kernel's memory. */
   readonly idempotency: "proposal-id";
+  /** Perform the trusted effect once per operationId. Output remains unknown until canonical output validation. */
   execute(input: JsonObject, context: ExecutorContext): Promise<unknown>;
 }
 
+/** Successfully constructed and evaluated proposal. Acceptance does not imply approval or execution. */
 export interface ProposalAccepted {
+  /** Discriminator separating the successful branch from a structured rejection; it is not an authorization grant. */
   readonly ok: true;
+  /** Immutable validated action and exact context binding retained by the kernel. */
   readonly proposal: ActionProposal;
+  /** Policy evaluation for the proposal; approval-required is not permission to execute. */
   readonly decision: PolicyDecision;
+  /** Exact-proposal approval request, or null when policy does not require human approval. */
   readonly challenge: ApprovalChallenge | null;
 }
 
+/** Kernel failure result that carries no successful proposal, approval, or execution receipt. */
 export interface OperationRejected {
+  /** Discriminator separating the successful branch from a structured rejection; it is not an authorization grant. */
   readonly ok: false;
+  /** Structured rejection reason. Unknown execution outcomes require host reconciliation, not blind retry. */
   readonly failure: KernelFailure;
 }
 
+/** Proposal creation result; a successful branch may still require exact human approval. */
 export type ProposalResult = ProposalAccepted | OperationRejected;
 
+/** Trusted approval submission matching one challenge, proposal identity, digest, and revision. */
 export interface ApproveActionRequest {
+  /** Identifier of the kernel-issued challenge that the trusted approver must answer. */
   readonly challengeId: string;
+  /** Identity of one submitted proposal, distinct even from an identical independent submission. */
   readonly proposalId: string;
+  /** SHA-256 digest of the exact proposal, including its unique identity; approvals must match it. */
   readonly proposalDigest: string;
+  /** Revision captured by the approval binding; editing requires a new proposal. */
   readonly proposalRevision: number;
+  /** Exact configured approver object supplied by the trusted host, never reconstructed from model fields. */
   readonly authority: HumanApprovalAuthority;
 }
 
+/** Exact approval creation result or a structured authority, mismatch, or expiry rejection. */
 export type ApprovalResult =
-  | { readonly ok: true; readonly approval: HumanApproval }
+  | {
+      /** Discriminator separating the successful branch from a structured rejection; it is not an authorization grant. */
+      readonly ok: true;
+      /** Immutable exact-proposal approval recorded by the kernel; it cannot authorize a separate submission. */
+      readonly approval: HumanApproval;
+    }
   | OperationRejected;
 
+/** Validated completion evidence or rejection; replay returns existing evidence without redispatch. */
 export type ExecutionResult =
   | {
+      /** Discriminator separating the successful branch from a structured rejection; it is not an authorization grant. */
       readonly ok: true;
+      /** Validated execution evidence retained for idempotent replay within this kernel instance. */
       readonly receipt: ExecutionReceipt;
+      /** True when returning a previously completed receipt without redispatching the executor. */
       readonly replayed: boolean;
     }
   | OperationRejected;
 
+/** Current in-memory lifecycle projection, including uncertain terminal failures and invalidated authority. */
 export type ProposalState =
   | "pending-approval"
   | "approval-expired"
@@ -88,42 +123,76 @@ export type ProposalState =
   | "succeeded"
   | "failed";
 
+/** Sanitized lifecycle view that omits arguments, context content, and executor results. */
 export interface SafeProposalStatus extends JsonObject {
+  /** Wire discriminator for this version of the envelope; it does not authenticate the sender. */
   readonly protocol: "totally-tubular.proposal-status/v1";
+  /** Identity of one submitted proposal, distinct even from an identical independent submission. */
   readonly proposalId: string;
+  /** SHA-256 digest of the exact proposal, including its unique identity; approvals must match it. */
   readonly proposalDigest: string;
+  /** Exact registered tool name; policy grants match this identifier without aliases. */
   readonly toolName: string;
+  /** Trusted host effect classification checked against the lease ceiling; model arguments cannot select or downgrade it. */
   readonly effect: string;
+  /** Most recently projected policy result; execution reevaluates live lease state. */
   readonly policyOutcome: string;
+  /** State interaction or lifecycle state, as defined by the containing contract. */
   readonly state: ProposalState;
+  /** Whether the contract requires approval of this exact proposal before execution. */
   readonly approvalRequired: boolean;
+  /** Identifier of the kernel-issued challenge that the trusted approver must answer. */
   readonly challengeId: string | null;
+  /** UTC ISO 8601 challenge expiry, or null when no approval challenge exists. */
   readonly challengeExpiresAt: string | null;
+  /** Completed execution receipt identifier, or null before successful completion. */
   readonly receiptId: string | null;
+  /** Terminal or current status failure category, or null when no failure applies. */
   readonly failureCode: string | null;
 }
 
+/** Principal-scoped status result, rejecting unknown or differently owned proposal identifiers. */
 export type ProposalStatusResult =
-  | { readonly ok: true; readonly status: SafeProposalStatus }
+  | {
+      /** Discriminator separating the successful branch from a structured rejection; it is not an authorization grant. */
+      readonly ok: true;
+      /** Sanitized state for the owning principal, excluding proposal arguments and execution output. */
+      readonly status: SafeProposalStatus;
+    }
   | OperationRejected;
 
+/** Private sealed proposal with its initial policy decision and optional exact-approval challenge. */
 interface ProposalRecord {
+  /** Immutable validated action and exact context binding retained by the kernel. */
   readonly proposal: ActionProposal;
+  /** Policy evaluation for the proposal; approval-required is not permission to execute. */
   readonly decision: PolicyDecision;
+  /** Exact-proposal approval request, or null when policy does not require human approval. */
   readonly challenge: ApprovalChallenge | null;
 }
 
+/** Trusted kernel configuration. All state, authority objects, and replay records are process-local. */
 export interface KernelOptions {
+  /** Host-selected namespace for deterministic tests; defaults to a fresh UUID per kernel. Reusing it across kernels does not provide global uniqueness or durable replay. */
+  readonly proposalNamespace?: string;
+  /** Positive safe-integer approval lifetime in milliseconds; defaults to 900000 (15 minutes). */
   readonly approvalTtlMs?: number;
+  /** Exact host authority objects allowed to approve; defaults to an empty set, denying all approvers. */
   readonly approvalAuthorities?: readonly HumanApprovalAuthority[];
+  /** Exact host authority objects allowed to register and revoke leases; defaults to none. */
   readonly leaseIssuerAuthorities?: readonly LeaseIssuerAuthority[];
+  /** Exact host authority objects allowed to register context manifests; defaults to none. */
   readonly contextRegistrationAuthorities?: readonly ContextRegistrationAuthority[];
+  /** Positive safe-integer cap on active proposals per principal; defaults to 128. */
   readonly maxPendingProposalsPerPrincipal?: number;
 }
 
+/** Object-identity capability configured by the host. Matching approverId text alone grants nothing. */
 export class HumanApprovalAuthority {
+  /** Nonempty label for the trusted approver; authorization also requires the same configured object identity. */
   readonly approverId: string;
 
+  /** Create a frozen capability with a nonempty label; the host must explicitly configure this object in the kernel. */
   constructor(approverId: string) {
     if (approverId.trim().length === 0) {
       throw new TypeError("approverId must not be empty");
@@ -133,9 +202,12 @@ export class HumanApprovalAuthority {
   }
 }
 
+/** Object-identity capability allowing the configured issuer to register and revoke its leases. */
 export class LeaseIssuerAuthority {
+  /** Nonempty issuer label; matching this string alone does not establish issuer authority. */
   readonly issuerId: string;
 
+  /** Create a frozen issuer capability with a nonempty label; a separate object with the same label is not equivalent. */
   constructor(issuerId: string) {
     if (issuerId.trim().length === 0) {
       throw new TypeError("issuerId must not be empty");
@@ -145,9 +217,12 @@ export class LeaseIssuerAuthority {
   }
 }
 
+/** Object-identity capability permitting explicit context registration by a configured host registrar. */
 export class ContextRegistrationAuthority {
+  /** Nonempty registrar label recorded in audit events; the configured object supplies authority. */
   readonly registrarId: string;
 
+  /** Create a frozen registrar capability; only configured object identity authorizes registration. */
   constructor(registrarId: string) {
     if (registrarId.trim().length === 0) {
       throw new TypeError("registrarId must not be empty");
@@ -157,8 +232,16 @@ export class ContextRegistrationAuthority {
   }
 }
 
+/** Project parser diagnostics into JSON-safe kernel failure details without including invalid argument values. */
 function validationDetails(
-  issues: readonly { readonly path: string; readonly code: string; readonly message: string }[],
+  issues: readonly {
+    /** Slash-delimited location of the invalid contract or value; this is not a filesystem path. */
+    readonly path: string;
+    /** Stable diagnostic category used for programmatic handling instead of parsing display text. */
+    readonly code: string;
+    /** Human-readable diagnostic explaining the violated expectation; do not use it as an authority signal. */
+    readonly message: string;
+  }[],
 ): JsonObject {
   return {
     issues: issues.map((issue) => ({
@@ -169,13 +252,14 @@ function validationDetails(
   };
 }
 
+/** Retain bounded ASCII references or hash other strings so audit fields do not expose arbitrary user text. */
 function safeAuditReference(value: string): string {
-  return /^[A-Za-z0-9._:/-]{1,128}$/.test(value)
-    ? value
-    : `sha256:${sha256(value)}`;
+  return /^[A-Za-z0-9._:/-]{1,128}$/.test(value) ? value : `sha256:${sha256(value)}`;
 }
 
+/** Render all approval-bound fields including unique submission identity for canonical proposal hashing. */
 function proposalBody(
+  id: string,
   request: ActionRequest,
   contract: RegisteredToolContract,
   input: JsonObject,
@@ -185,6 +269,7 @@ function proposalBody(
 ): JsonObject {
   return {
     protocol: "totally-tubular.proposal/v1",
+    id,
     principalId: request.principalId,
     leaseId: request.leaseId,
     toolName: contract.name,
@@ -200,6 +285,7 @@ function proposalBody(
   };
 }
 
+/** Render successful output and its exact proposal, approval, and audit bindings for canonical receipt hashing. */
 function receiptBody(
   proposal: ActionProposal,
   approval: HumanApproval | undefined,
@@ -223,31 +309,65 @@ function receiptBody(
   };
 }
 
+/** In-process policy, approval, execution, and audit boundary. State is ephemeral and offers no cross-process recovery. */
 export class TotallyTubularKernel {
+  /** Host test namespace or fresh random UUID separating default kernel instances; not a durable node identity. */
+  readonly #proposalNamespace: string;
+  /** Monotonic bigint submission counter, incremented synchronously so same-tick requests cannot collide. */
+  #proposalSequence = 0n;
+  /** Canonical tool definitions shared by validation and policy. */
   readonly #registry: ContractRegistry;
+  /** Injected time source shared by this component's timestamp and expiry decisions. */
   readonly #clock: Clock;
+  /** Evaluator using current lease usage, revocation, effect, context, and approval requirements. */
   readonly #policy: PolicyEngine;
+  /** Private append capability for the process-local hash-linked event history. */
   readonly #audit: AuditLog;
+  /** Frozen read-only audit view exposed to trusted callers. */
   readonly #auditReader: AuditReader;
+  /** Configured challenge lifetime in milliseconds, bounded by lease expiry. */
   readonly #approvalTtlMs: number;
+  /** Maximum active proposals counted for one principal before new submissions are rejected. */
   readonly #maxPendingProposalsPerPrincipal: number;
+  /** Configured object identities accepted for approval and revocation. */
   readonly #approvalAuthorities: ReadonlySet<HumanApprovalAuthority>;
+  /** Configured object identities accepted for lease registration and revocation. */
   readonly #leaseIssuerAuthorities: ReadonlySet<LeaseIssuerAuthority>;
+  /** Configured object identities accepted for manifest registration. */
   readonly #contextRegistrationAuthorities: ReadonlySet<ContextRegistrationAuthority>;
+  /** Sealed registered leases indexed by content-derived identifier. */
   readonly #leases = new Map<string, AuthorityLease>();
+  /** Dispatch reservations per lease, consumed before any awaited executor work. */
   readonly #leaseUses = new Map<string, number>();
+  /** Lease revocations retained for the lifetime of this kernel. */
   readonly #revokedLeaseIds = new Set<string>();
+  /** Sealed explicit context selections registered by trusted host authorities. */
   readonly #manifests = new Map<string, ContextManifest>();
+  /** Host-installed effect adapters indexed by registered tool name. */
   readonly #executors = new Map<string, ToolExecutor>();
+  /** Unique submission records retained for status, approval binding, and execution. */
   readonly #proposals = new Map<string, ProposalRecord>();
+  /** Exact-proposal approval challenges indexed by challenge identity. */
   readonly #challenges = new Map<string, ApprovalChallenge>();
+  /** Accepted human approvals indexed by proposal identity for dispatch-time checks. */
   readonly #approvals = new Map<string, HumanApproval>();
+  /** Proposal identities whose accepted approvals have been revoked. */
   readonly #revokedProposalApprovals = new Set<string>();
+  /** Successful receipts retained by proposal identity for non-dispatching replay. */
   readonly #receipts = new Map<string, ExecutionReceipt>();
+  /** Post-dispatch failures retained to prevent blind retries of potentially completed effects. */
   readonly #terminalExecutionFailures = new Map<string, OperationRejected>();
+  /** Shared execution promises reserved before executor entry to coalesce concurrent calls for one proposal. */
   readonly #inFlightExecutions = new Map<string, Promise<ExecutionResult>>();
 
+  /** Create an empty in-process kernel with validated limits and explicit host authority objects; no persistent state is loaded. */
   constructor(registry: ContractRegistry, clock: Clock, options: KernelOptions = {}) {
+    this.#proposalNamespace = options.proposalNamespace ?? randomUUID();
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(this.#proposalNamespace)) {
+      throw new TypeError(
+        "proposalNamespace must contain 1 to 64 ASCII letters, digits, underscores, or hyphens",
+      );
+    }
     this.#registry = registry;
     this.#clock = clock;
     this.#policy = new PolicyEngine(clock);
@@ -257,13 +377,10 @@ export class TotallyTubularKernel {
       verify: () => this.#audit.verify(),
     });
     this.#approvalTtlMs = options.approvalTtlMs ?? 15 * 60 * 1_000;
-    this.#maxPendingProposalsPerPrincipal =
-      options.maxPendingProposalsPerPrincipal ?? 128;
+    this.#maxPendingProposalsPerPrincipal = options.maxPendingProposalsPerPrincipal ?? 128;
     this.#approvalAuthorities = new Set(options.approvalAuthorities ?? []);
     this.#leaseIssuerAuthorities = new Set(options.leaseIssuerAuthorities ?? []);
-    this.#contextRegistrationAuthorities = new Set(
-      options.contextRegistrationAuthorities ?? [],
-    );
+    this.#contextRegistrationAuthorities = new Set(options.contextRegistrationAuthorities ?? []);
     if (!Number.isSafeInteger(this.#approvalTtlMs) || this.#approvalTtlMs < 1) {
       throw new TypeError("approvalTtlMs must be a positive safe integer");
     }
@@ -275,14 +392,13 @@ export class TotallyTubularKernel {
     }
   }
 
+  /** Expose immutable event snapshots and verification without exposing the append capability. */
   get audit(): AuditReader {
     return this.#auditReader;
   }
 
-  registerManifest(
-    manifest: ContextManifest,
-    authority: ContextRegistrationAuthority,
-  ): void {
+  /** Require a configured registrar, verify and seal context, reject duplicate registration, and append audit evidence. */
+  registerManifest(manifest: ContextManifest, authority: ContextRegistrationAuthority): void {
     if (!this.#contextRegistrationAuthorities.has(authority)) {
       throw new Error("The caller does not possess the context registration authority");
     }
@@ -300,11 +416,9 @@ export class TotallyTubularKernel {
     });
   }
 
+  /** Require the matching configured issuer, verify and seal the lease, and record registration in audit. */
   registerLease(lease: AuthorityLease, authority: LeaseIssuerAuthority): void {
-    if (
-      !this.#leaseIssuerAuthorities.has(authority) ||
-      authority.issuerId !== lease.issuedBy
-    ) {
+    if (!this.#leaseIssuerAuthorities.has(authority) || authority.issuerId !== lease.issuedBy) {
       throw new Error("The caller does not possess the lease issuer authority");
     }
     if (this.#leases.has(lease.id)) {
@@ -322,15 +436,13 @@ export class TotallyTubularKernel {
     });
   }
 
+  /** Require the matching issuer capability and record revocation; return false for missing or already revoked leases. */
   revokeLease(leaseId: string, authority: LeaseIssuerAuthority): boolean {
     const lease = this.#leases.get(leaseId);
     if (lease === undefined) {
       return false;
     }
-    if (
-      !this.#leaseIssuerAuthorities.has(authority) ||
-      authority.issuerId !== lease.issuedBy
-    ) {
+    if (!this.#leaseIssuerAuthorities.has(authority) || authority.issuerId !== lease.issuedBy) {
       throw new Error("The caller does not possess the lease issuer authority");
     }
     if (this.#revokedLeaseIds.has(leaseId)) {
@@ -344,6 +456,7 @@ export class TotallyTubularKernel {
     return true;
   }
 
+  /** Require a configured approver and revoke the proposal's approval with audit evidence. */
   revokeApproval(proposalId: string, authority: HumanApprovalAuthority): boolean {
     if (!this.#approvalAuthorities.has(authority)) {
       throw new Error("The caller does not possess a human approval authority");
@@ -362,6 +475,7 @@ export class TotallyTubularKernel {
     return true;
   }
 
+  /** Install one trusted adapter for a known contract, requiring proposal-id idempotency and rejecting duplicate adapters. */
   registerExecutor(executor: ToolExecutor): void {
     if (this.#registry.get(executor.toolName) === undefined) {
       throw new Error(`Cannot bind an executor without a contract: ${executor.toolName}`);
@@ -383,6 +497,7 @@ export class TotallyTubularKernel {
     );
   }
 
+  /** Validate arguments and host bindings, allocate a unique submission identity, evaluate policy, and audit the result. */
   propose(request: ActionRequest): ProposalResult {
     const contract = this.#registry.get(request.toolName);
     if (contract === undefined) {
@@ -402,7 +517,11 @@ export class TotallyTubularKernel {
     if (manifest === undefined) {
       return this.#rejectProposal(
         request,
-        kernelFailure("MANIFEST_NOT_FOUND", "The requested context manifest does not exist.", false),
+        kernelFailure(
+          "MANIFEST_NOT_FOUND",
+          "The requested context manifest does not exist.",
+          false,
+        ),
       );
     }
     if (manifest.principalId !== request.principalId) {
@@ -472,11 +591,14 @@ export class TotallyTubularKernel {
       );
     }
     const createdAt = this.#clock.now().toISOString();
-    const body = proposalBody(request, contract, input, resource, manifest, createdAt);
+    // Reserve identity synchronously. Equal content and clock readings are
+    // independent submissions; only executing the same ID is a replay.
+    const id = `proposal_${this.#proposalNamespace}_${++this.#proposalSequence}`;
+    const body = proposalBody(id, request, contract, input, resource, manifest, createdAt);
     const digest = sha256(stableStringify(body));
     const proposal: ActionProposal = Object.freeze({
       protocol: "totally-tubular.proposal/v1",
-      id: `proposal_${digest.slice(0, 24)}`,
+      id,
       principalId: request.principalId,
       leaseId: request.leaseId,
       toolName: contract.name,
@@ -520,23 +642,20 @@ export class TotallyTubularKernel {
     if (decision.outcome === "deny") {
       return {
         ok: false,
-        failure: kernelFailure(
-          "POLICY_DENIED",
-          decision.explanation,
-          false,
-          { policyReasonCode: decision.reasonCode, decisionId: decision.id },
-        ),
+        failure: kernelFailure("POLICY_DENIED", decision.explanation, false, {
+          policyReasonCode: decision.reasonCode,
+          decisionId: decision.id,
+        }),
       };
     }
 
     const challenge =
-      decision.outcome === "approval-required"
-        ? this.#createApprovalChallenge(proposal)
-        : null;
+      decision.outcome === "approval-required" ? this.#createApprovalChallenge(proposal) : null;
     this.#proposals.set(proposal.id, { proposal, decision, challenge });
     return { ok: true, proposal, decision, challenge };
   }
 
+  /** Require exact challenge, proposal identity, digest, revision, unexpired authority, and a configured approver object. */
   approve(request: ApproveActionRequest): ApprovalResult {
     if (!this.#approvalAuthorities.has(request.authority)) {
       this.#audit.append("approval.rejected", "totally-tubular.kernel", {
@@ -655,6 +774,7 @@ export class TotallyTubularKernel {
     return { ok: true, approval };
   }
 
+  /** Replay a completed receipt, coalesce in-flight calls, or reserve one dispatch. Unknown outcomes remain terminal until host reconciliation outside this kernel. */
   async execute(proposalId: string, signal?: AbortSignal): Promise<ExecutionResult> {
     const receipt = this.#receipts.get(proposalId);
     if (receipt !== undefined) {
@@ -669,7 +789,9 @@ export class TotallyTubularKernel {
       const result = await inFlight;
       return result.ok ? { ...result, replayed: true } : result;
     }
-    const execution = this.#executeOnce(proposalId, signal);
+    // Publish the in-flight reservation before any trusted executor can run or
+    // synchronously re-enter execute. Policy and lease uses are checked inside.
+    const execution = Promise.resolve().then(() => this.#executeOnce(proposalId, signal));
     this.#inFlightExecutions.set(proposalId, execution);
     try {
       return await execution;
@@ -678,6 +800,7 @@ export class TotallyTubularKernel {
     }
   }
 
+  /** Return sanitized lifecycle state only to the owning principal; do not expose arguments, context, or output. */
   getProposalStatus(principalId: string, proposalId: string): ProposalStatusResult {
     const record = this.#proposals.get(proposalId);
     if (record === undefined || record.proposal.principalId !== principalId) {
@@ -740,6 +863,7 @@ export class TotallyTubularKernel {
     };
   }
 
+  /** Count only active proposals, excluding completed, failed, expired, or invalidated work. */
   #proposalConsumesPendingSlot(record: ProposalRecord): boolean {
     const proposalId = record.proposal.id;
     if (
@@ -760,10 +884,7 @@ export class TotallyTubularKernel {
     }
     const approval = this.#approvals.get(proposalId);
     if (approval !== undefined) {
-      return (
-        parseInstant(approval.expiresAt, "approval expiry") >
-        this.#clock.now().getTime()
-      );
+      return parseInstant(approval.expiresAt, "approval expiry") > this.#clock.now().getTime();
     }
     return (
       record.challenge === null ||
@@ -772,6 +893,7 @@ export class TotallyTubularKernel {
     );
   }
 
+  /** Recheck policy and approval, reserve lease usage synchronously, then dispatch once and audit success or terminal uncertainty. */
   async #executeOnce(proposalId: string, signal?: AbortSignal): Promise<ExecutionResult> {
     const existing = this.#receipts.get(proposalId);
     if (existing !== undefined) {
@@ -815,12 +937,10 @@ export class TotallyTubularKernel {
     if (decision.outcome === "deny") {
       return {
         ok: false,
-        failure: kernelFailure(
-          "POLICY_DENIED",
-          decision.explanation,
-          false,
-          { policyReasonCode: decision.reasonCode, decisionId: decision.id },
-        ),
+        failure: kernelFailure("POLICY_DENIED", decision.explanation, false, {
+          policyReasonCode: decision.reasonCode,
+          decisionId: decision.id,
+        }),
       };
     }
 
@@ -859,10 +979,7 @@ export class TotallyTubularKernel {
           ),
         };
       }
-      if (
-        parseInstant(approval.expiresAt, "approval expiry") <=
-        this.#clock.now().getTime()
-      ) {
+      if (parseInstant(approval.expiresAt, "approval expiry") <= this.#clock.now().getTime()) {
         return {
           ok: false,
           failure: kernelFailure("APPROVAL_EXPIRED", "The approval has expired.", true),
@@ -989,6 +1106,7 @@ export class TotallyTubularKernel {
     return { ok: true, receipt, replayed: false };
   }
 
+  /** Record a sanitized proposal rejection and return its structured failure without allocating executable work. */
   #rejectProposal(request: ActionRequest, failure: KernelFailure): OperationRejected {
     this.#audit.append("action.rejected", "totally-tubular.kernel", {
       principalId: safeAuditReference(request.principalId),
@@ -1000,6 +1118,7 @@ export class TotallyTubularKernel {
     return { ok: false, failure };
   }
 
+  /** Create a challenge bound to identity, digest, and revision with expiry capped by the lease. */
   #createApprovalChallenge(proposal: ActionProposal): ApprovalChallenge {
     const requestedAt = this.#clock.now().toISOString();
     const expiresAt = new Date(
@@ -1036,6 +1155,7 @@ export class TotallyTubularKernel {
     return challenge;
   }
 
+  /** Export trusted-host diagnostic state including sensitive proposal data; no import, durable persistence, or recovery protocol is implemented. */
   exportState(): JsonObject {
     return {
       leases: [...this.#leases.values()].map((lease) => authorityLeaseToJson(lease)),
@@ -1045,12 +1165,8 @@ export class TotallyTubularKernel {
       challenges: [...this.#challenges.values()].map((challenge) =>
         approvalChallengeToJson(challenge),
       ),
-      approvals: [...this.#approvals.values()].map((approval) =>
-        humanApprovalToJson(approval),
-      ),
-      receipts: [...this.#receipts.values()].map((receipt) =>
-        executionReceiptToJson(receipt),
-      ),
+      approvals: [...this.#approvals.values()].map((approval) => humanApprovalToJson(approval)),
+      receipts: [...this.#receipts.values()].map((receipt) => executionReceiptToJson(receipt)),
       audit: this.#audit.entries().map((event) => ({
         id: event.id,
         sequence: event.sequence,

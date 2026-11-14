@@ -1,0 +1,66 @@
+{
+  "formatVersion": "0.1.0",
+  "name": "hello",
+  "version": "0.1.0",
+  "tools": [
+    {
+      "name": "findProjects",
+      "description": "Find projects in the selected workspace without fetching additional context.",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "description": "Maximum returned matches. Omission uses the handler's limit of 10.",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 10,
+            "examples": [
+              5
+            ]
+          },
+          "query": {
+            "type": "string",
+            "description": "Text to find within a project name; empty searches are rejected.",
+            "minLength": 1,
+            "maxLength": 100,
+            "examples": [
+              "tubular"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false,
+        "description": "Case-insensitive search over the project names explicitly supplied by the host.",
+        "examples": [
+          {
+            "query": "tubular",
+            "limit": 5
+          }
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names within the selected host context. No project metadata is fetched."
+          }
+        },
+        "required": [
+          "projects"
+        ],
+        "additionalProperties": false,
+        "description": "Matching names in the host's original order; an empty list is a successful search."
+      },
+      "title": "Find projects",
+      "resultDescription": "Matching project names, capped by the requested limit."
+    }
+  ]
+}

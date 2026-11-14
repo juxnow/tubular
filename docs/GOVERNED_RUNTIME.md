@@ -4,7 +4,7 @@ Tubular's generated binding, schema validation, contract catalog, MCP adapter, a
 
 ## Authoring and build contract
 
-The TypeScript compiler derives input and awaited output schemas from the same exported function that the generated binding imports. The host uses the generated factory to add public metadata, effect classification, approval requirements, and a typed resource resolver. A public name can differ from the exported function name. The factory captures the handler and schemas before the host supplies metadata, and rejects a separate schema map in the read-only runtime.
+The TypeScript compiler derives input and awaited output schemas and discovery metadata from the same exported function that the generated binding imports. The host uses the generated factory to select effect classification, approval requirements, and a typed resource resolver. Function prose supplies the description unless the host deliberately overrides it. A public name can differ from the exported function name. The factory captures the handler and schemas before host configuration, and rejects a separate schema map in the read-only runtime. See [source contracts](SOURCE_CONTRACTS.md) for supported annotations and enforced constraints.
 
 The source fingerprint covers local program sources except the generated binding destination, emitted schemas, and the TypeScript compiler version. It includes imported local models and implementation-only edits. It excludes external dependency source files and default libraries. Generated output has relative paths and no timestamps. Lock dependencies and run the compiler's drift check during every relevant build. Hashes provide self-consistency, not signatures or runtime code attestation. The lower-level binding helper is trusted infrastructure, not proof that arbitrary manually supplied schemas match a function.
 
@@ -36,6 +36,10 @@ Authentication remains the host's responsibility. An authority object is an in-p
 
 The library does not decide that a human reviewed something merely because a model requested approval. The example's approval is a labeled simulation. An application must implement an authenticated review surface and bind the displayed content to the approved digest.
 
+Each independent submission has a unique proposal ID formed from a per-kernel namespace and a synchronously incremented bigint counter. The namespace defaults to a fresh UUID. The proposal digest covers that ID along with the arguments, context, resource, revision, and timestamp, so identical same-tick submissions have different digests and approval challenges. Execution reserves its in-flight entry before calling an executor, including executors that synchronously re-enter the kernel. Separate proposals compete against the same live lease budget, while concurrent execution of one proposal shares its dispatch and receipt.
+
+Trusted tests may set `KernelOptions.proposalNamespace` to 1 to 64 ASCII letters, digits, underscores, or hyphens. Reusing that namespace in independent kernels can repeat IDs. Neither the namespace nor the counter is persisted, and this design does not provide cross-process deduplication or restart recovery. Do not use a new proposal to retry an uncertain effect without reconciliation.
+
 `propose` and `execute` return discriminated results with kernel failure codes. `invoke` returns `ask` with the proposal reference, `success` with output and receipt, `deny` for proposal rejection, or `execution_error` for execution rejection. MCP returns a sanitized failure status and, for `ask`, only the proposal ID/digest. Approval, resumption, and receipt retrieval remain host operations; the current MCP adapter has no approval UI or automatic resume protocol.
 
 ## Failure and durability limits
@@ -48,6 +52,6 @@ Resource matching currently accepts canonical workspace URIs and bounded workspa
 
 ## Machine-readable projections
 
-The capability manifest carries schemas, effect, source provenance, approval requirement, and the governed execution marker. OpenAPI carries those semantics as extensions and marks both the document and synthetic operations as documentation projections with no network endpoint. It is a usable contract projection, but its paths are not deployed routes and its success response is not a complete HTTP approval/error protocol. Hosts implementing HTTP must define that protocol and enforce the same runtime boundary.
+The capability manifest carries documented schemas, source description/title, effect, source provenance, approval requirement, and the governed execution marker. OpenAPI carries the relevant metadata and marks both the document and synthetic operations as documentation projections with no network endpoint. Its hypothetical 422 schema is generated from the runtime's named input-validation failure type. Extensions do not enforce authorization or approval. These paths are not deployed routes and do not implement a complete HTTP approval/error protocol. Hosts implementing HTTP must define that protocol and enforce the same runtime boundary.
 
 MCP invokes the same runtime with one host-bound session. The current adapter supports tools and object-shaped outputs, including object-only unions. Resources, prompts, provider-specific function adapters, HTTP endpoints, and transport authentication are not implemented by this integration. For HTTP hosts, configure input/request limits and bearer-token audience validation where applicable; SDK defaults must not be treated as a complete host security configuration.

@@ -6,9 +6,19 @@ const contract = {
   properties: {
     name: { type: "string", description: "Person name" },
     count: { type: "number" },
-    kind: { anyOf: [{ type: "string", const: "friend" }, { type: "string", const: "colleague" }] },
+    kind: {
+      anyOf: [
+        { type: "string", const: "friend" },
+        { type: "string", const: "colleague" },
+      ],
+    },
     notes: { type: "array", items: { anyOf: [{ type: "string" }, { type: "null" }] } },
-    nested: { type: "object", properties: { active: { type: "boolean" } }, required: ["active"], additionalProperties: false },
+    nested: {
+      type: "object",
+      properties: { active: { type: "boolean" } },
+      required: ["active"],
+      additionalProperties: false,
+    },
   },
   required: ["name", "kind", "notes", "nested"],
   additionalProperties: false,
@@ -32,7 +42,12 @@ describe("generated schema validation", () => {
   it("rejects unsupported or malformed schemas instead of widening them", () => {
     expect(validateSchema({ type: "string", pattern: "a" }, "b").ok).toBe(false);
     expect(validateSchema({ type: "object", properties: {} }, {}).ok).toBe(false);
-    expect(validateSchema({ type: "object", properties: {}, required: ["missing"], additionalProperties: false }, {}).ok).toBe(false);
+    expect(
+      validateSchema(
+        { type: "object", properties: {}, required: ["missing"], additionalProperties: false },
+        {},
+      ).ok,
+    ).toBe(false);
     expect(validateSchema({ type: "array" }, []).ok).toBe(false);
     expect(validateSchema({ anyOf: [] }, "anything").ok).toBe(false);
     expect(validateSchema({}, "anything").ok).toBe(false);
@@ -42,7 +57,9 @@ describe("generated schema validation", () => {
     const schema = {
       type: "object",
       properties: {
-        choice: { anyOf: [{ type: "string" }, { type: "array", items: { type: "number", minimum: 2 } }] },
+        choice: {
+          anyOf: [{ type: "string" }, { type: "array", items: { type: "number", minimum: "two" } }],
+        },
       },
       required: ["choice"],
       additionalProperties: false,
@@ -54,9 +71,26 @@ describe("generated schema validation", () => {
   it("does not inspect input when the schema is invalid or invoke schema getters", () => {
     let schemaGetter = false;
     let inputGetter = false;
-    const schema = Object.defineProperty({}, "type", { enumerable: true, get() { schemaGetter = true; return "string"; } });
-    const input = Object.defineProperty({}, "secret", { enumerable: true, get() { inputGetter = true; return 1; } });
-    expect(validateSchema(schema, input)).toMatchObject({ ok: false, issues: [{ code: "invalid_schema" }] });
+    const schema = Object.defineProperty({}, "type", {
+      enumerable: true,
+      /** Adversarial getter that records access; boundary validation must reject it without invocation. */
+      get() {
+        schemaGetter = true;
+        return "string";
+      },
+    });
+    const input = Object.defineProperty({}, "secret", {
+      enumerable: true,
+      /** Adversarial getter that records access; boundary validation must reject it without invocation. */
+      get() {
+        inputGetter = true;
+        return 1;
+      },
+    });
+    expect(validateSchema(schema, input)).toMatchObject({
+      ok: false,
+      issues: [{ code: "invalid_schema" }],
+    });
     expect(schemaGetter).toBe(false);
     expect(inputGetter).toBe(false);
   });
@@ -65,17 +99,33 @@ describe("generated schema validation", () => {
     expect(validateSchema({ type: "number" }, Number.NaN).ok).toBe(false);
     expect(validateSchema({ type: "number" }, Infinity).ok).toBe(false);
     expect(validateSchema({ type: "number" }, 3n).ok).toBe(false);
-    expect(validateSchema({ type: "object", properties: {}, required: [], additionalProperties: false }, new Date()).ok).toBe(false);
+    expect(
+      validateSchema(
+        { type: "object", properties: {}, required: [], additionalProperties: false },
+        new Date(),
+      ).ok,
+    ).toBe(false);
   });
 
   it("does not execute getters and rejects custom prototypes, symbols, and hidden fields", () => {
     let touched = false;
-    const getter = Object.defineProperty({}, "name", { enumerable: true, get() { touched = true; return "Tony"; } });
+    const getter = Object.defineProperty({}, "name", {
+      enumerable: true,
+      /** Adversarial getter that records access; boundary validation must reject it without invocation. */
+      get() {
+        touched = true;
+        return "Tony";
+      },
+    });
     expect(validateSchema(contract, getter).ok).toBe(false);
     expect(touched).toBe(false);
-    expect(validateSchema(contract, Object.assign(Object.create({ inherited: true }), valid)).ok).toBe(false);
+    expect(
+      validateSchema(contract, Object.assign(Object.create({ inherited: true }), valid)).ok,
+    ).toBe(false);
     expect(validateSchema(contract, { ...valid, [Symbol("secret")]: true }).ok).toBe(false);
-    expect(validateSchema(contract, Object.defineProperty({ ...valid }, "hidden", { value: 1 })).ok).toBe(false);
+    expect(
+      validateSchema(contract, Object.defineProperty({ ...valid }, "hidden", { value: 1 })).ok,
+    ).toBe(false);
   });
 
   it("rejects sparse and extended arrays and cyclic values", () => {
@@ -91,18 +141,35 @@ describe("generated schema validation", () => {
 
   it("rejects nested accessors without calling them", () => {
     let called = false;
-    const nested = Object.defineProperty({}, "active", { enumerable: true, get() { called = true; return true; } });
+    const nested = Object.defineProperty({}, "active", {
+      enumerable: true,
+      /** Adversarial getter that records access; boundary validation must reject it without invocation. */
+      get() {
+        called = true;
+        return true;
+      },
+    });
     expect(validateSchema(contract, { ...valid, nested }).ok).toBe(false);
     expect(called).toBe(false);
   });
 
   it("treats __proto__ as a data property and fails safely on throwing proxies", () => {
     const input: unknown = JSON.parse('{"__proto__":{"polluted":true}}');
-    const schema: unknown = JSON.parse('{"type":"object","properties":{"__proto__":{"type":"object","properties":{"polluted":{"type":"boolean"}},"required":["polluted"],"additionalProperties":false}},"required":["__proto__"],"additionalProperties":false}');
+    const schema: unknown = JSON.parse(
+      '{"type":"object","properties":{"__proto__":{"type":"object","properties":{"polluted":{"type":"boolean"}},"required":["polluted"],"additionalProperties":false}},"required":["__proto__"],"additionalProperties":false}',
+    );
     const result = validateSchema(schema, input);
     expect(result.ok).toBe(true);
     expect(Object.hasOwn(Object.prototype, "polluted")).toBe(false);
-    const throwing = new Proxy({}, { ownKeys() { throw new Error("hostile"); } });
+    const throwing = new Proxy(
+      {},
+      {
+        /** Adversarial proxy trap that throws; the boundary must convert it into validation failure. */
+        ownKeys() {
+          throw new Error("hostile");
+        },
+      },
+    );
     expect(validateSchema(contract, throwing).ok).toBe(false);
   });
 });

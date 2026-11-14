@@ -1,12 +1,14 @@
+import { PROPOSAL_ID_PATTERN } from "../authority/types.js";
 import { deepFreezeJsonObject, type JsonObject, type JsonValue } from "../core/json.js";
 import {
-  referencePortAuthority,
-  verifyPortAuthorityIntegrity,
   type AuthorityRequirement,
   type CapabilityDefinition,
   type PortAuthorityDefinition,
+  referencePortAuthority,
+  verifyPortAuthorityIntegrity,
 } from "../port-authority/definition.js";
 
+/** Project a portable capability into discovery metadata without creating an execution surface. */
 function capabilityProjection(capability: CapabilityDefinition): JsonObject {
   return {
     id: capability.id,
@@ -25,68 +27,77 @@ function capabilityProjection(capability: CapabilityDefinition): JsonObject {
   };
 }
 
+/** Render declared effect kinds into explanatory discovery text. */
 function effectSummary(capability: CapabilityDefinition): string {
   return capability.effects.map((effect) => effect.kindRef).join(",");
 }
 
-function authorityUsesScheme(
-  requirement: AuthorityRequirement,
-  schemeId: string,
-): boolean {
+/** Recursively inspect a portable authority expression for a named scheme; this is not authorization. */
+function authorityUsesScheme(requirement: AuthorityRequirement, schemeId: string): boolean {
   if (requirement.kind === "none") {
     return false;
   }
   if (requirement.kind === "scheme") {
     return requirement.schemeRef === schemeId;
   }
-  return requirement.requirements.some((child) =>
-    authorityUsesScheme(child, schemeId),
-  );
+  return requirement.requirements.some((child) => authorityUsesScheme(child, schemeId));
 }
 
+/** Describe whether portable authority metadata calls for exact human approval. */
 function approvalSummary(capability: CapabilityDefinition): string {
-  return authorityUsesScheme(capability.authority, "exact-human-approval")
-    ? "exact-human"
-    : "none";
+  return authorityUsesScheme(capability.authority, "exact-human-approval") ? "exact-human" : "none";
 }
 
+/** Reject nonconforming or tampered portable definitions before generating downstream projections. */
 function assertProjectable(portAuthority: PortAuthorityDefinition): void {
   if (!verifyPortAuthorityIntegrity(portAuthority)) {
     throw new TypeError("Cannot project a non-conforming or tampered Port Authority");
   }
 }
 
-function ensureUnique(
-  seen: Set<string>,
-  value: string,
-  projection: string,
-): void {
+/** Reject projected name collisions so distinct capabilities cannot silently overwrite one another. */
+function ensureUnique(seen: Set<string>, value: string, projection: string): void {
   if (seen.has(value)) {
     throw new TypeError(`${projection} projection collision: ${value}`);
   }
   seen.add(value);
 }
 
+/** MCP discovery hints derived from portable semantics. Clients must not treat these hints as authorization. */
 export interface McpToolAnnotations extends JsonObject {
+  /** MCP discovery hint that the tool does not mutate state; it is not a security boundary. */
   readonly readOnlyHint: boolean;
+  /** MCP discovery hint that the declared operation can be destructive; host authorization remains required. */
   readonly destructiveHint: boolean;
+  /** MCP hint about repeated identical tool calls; proposal creation must not be advertised as idempotent execution. */
   readonly idempotentHint: boolean;
+  /** MCP hint about interaction beyond the local system; it does not grant network access. */
   readonly openWorldHint: boolean;
 }
 
+/** Native legacy gateway tool description with JSON Schema input and derived MCP hints. */
 export interface McpToolDescriptor extends JsonObject {
+  /** Native MCP tool identifier derived from a portable capability or gateway status operation. */
   readonly name: string;
+  /** Short human-readable display title; identifiers remain the stable integration keys. */
   readonly title: string;
+  /** Human-readable semantics exposed in discovery; descriptive text does not enforce runtime policy. */
   readonly description: string;
+  /** Canonical JSON Schema describing accepted input; consumers must also respect host policy and runtime validation. */
   readonly inputSchema: JsonObject;
+  /** Native MCP discovery hints derived from the canonical contract, not enforcement rules. */
   readonly annotations: McpToolAnnotations;
 }
 
+/** Mapping from a native MCP tool to a portable capability or the gateway status operation. */
 export interface McpToolBinding {
+  /** Native MCP definition used consistently for registration and documentation projection. */
   readonly descriptor: McpToolDescriptor;
+  /** Portable capability represented by the tool, or null for a gateway-only status operation. */
   readonly canonicalCapabilityId: string | null;
 }
 
+/** Derive proposal-only native MCP definitions and a safe status tool from the portable contract. */
 export function createMcpToolBindings(
   portAuthority: PortAuthorityDefinition,
 ): readonly McpToolBinding[] {
@@ -98,8 +109,7 @@ export function createMcpToolBindings(
     const descriptor = deepFreezeJsonObject({
       name,
       title: `Propose: ${capability.title}`,
-      description:
-        `${capability.description} This records a proposal only; it never performs the effect.`,
+      description: `${capability.description} This records a proposal only; it never performs the effect.`,
       inputSchema: capability.inputSchema,
       annotations: {
         readOnlyHint: false,
@@ -135,7 +145,7 @@ export function createMcpToolBindings(
           properties: {
             proposalId: {
               type: "string",
-              pattern: "^proposal_[a-f0-9]{24}$",
+              pattern: PROPOSAL_ID_PATTERN,
               description: "Proposal identifier returned by a tt.propose.* tool",
             },
           },
@@ -153,19 +163,17 @@ export function createMcpToolBindings(
   return Object.freeze(bindings);
 }
 
-export function projectContractCatalog(
-  portAuthority: PortAuthorityDefinition,
-): JsonObject {
+/** Create deterministic discovery metadata from a verified portable definition. */
+export function projectContractCatalog(portAuthority: PortAuthorityDefinition): JsonObject {
   assertProjectable(portAuthority);
   return {
     protocol: "second-service.contract-catalog/v0",
     sourcePortAuthority: referencePortAuthority(portAuthority),
-    capabilities: portAuthority.capabilities.map((capability) =>
-      capabilityProjection(capability),
-    ),
+    capabilities: portAuthority.capabilities.map((capability) => capabilityProjection(capability)),
   };
 }
 
+/** Wrap the legacy proposal-only MCP definitions for deterministic documentation output. */
 export function projectMcpTools(portAuthority: PortAuthorityDefinition): JsonObject {
   const bindings = createMcpToolBindings(portAuthority);
 
@@ -178,6 +186,7 @@ export function projectMcpTools(portAuthority: PortAuthorityDefinition): JsonObj
   };
 }
 
+/** Produce OpenAPI 3.1 documentation for hypothetical HTTP paths; no HTTP adapter or authorization middleware is installed. */
 export function projectOpenApi(portAuthority: PortAuthorityDefinition): JsonObject {
   assertProjectable(portAuthority);
   const paths: Record<string, JsonValue> = {};
