@@ -1,0 +1,103 @@
+#!/usr/bin/env node
+import { execFileSync, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+
+/** Compute a SHA-256 hex digest of a file on disk, or null if missing. */
+function hashFile(filePath) {
+  if (!existsSync(filePath)) {
+    return null;
+  }
+  return createHash("sha256").update(readFileSync(filePath)).digest("hex");
+}
+
+/** Return NUL-delimited staged file paths (Added, Copied, Modified, Renamed). */
+function getStagedFiles() {
+  const output = execFileSync(
+    "git",
+    ["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"],
+    { encoding: "utf8" },
+  );
+  return output
+    .split("\0")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && existsSync(entry));
+}
+
+const stagedFiles = getStagedFiles();
+if (stagedFiles.length === 0) {
+  process.exit(0);
+}
+
+const beforeHashes = new Map(stagedFiles.map((file) => [file, hashFile(file)]));
+
+const biomeBin = path.resolve("node_modules", ".bin", "biome");
+const biomeResult = spawnSync(
+  biomeBin,
+  ["check", "--write", "--no-errors-on-unmatched", "--", ...stagedFiles],
+  { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+);
+
+const modifiedByBiome = stagedFiles.filter((file) => {
+  const afterHash = hashFile(file);
+  return afterHash !== null && afterHash !== beforeHashes.get(file);
+});
+
+if (modifiedByBiome.length > 0) {
+  execFileSync("git", ["add", "--", ...modifiedByBiome], { stdio: "inherit" });
+  process.stderr.write(
+    `\n[pre-commit] Biome auto-formatted and re-staged ${modifiedByBiome.length} file(s):\n`,
+  );
+  for (const file of modifiedByBiome) {
+    process.stderr.write(`  - ${file}\n`);
+  }
+}
+
+if (biomeResult.status !== 0) {
+  if (biomeResult.stdout) process.stderr.write(biomeResult.stdout);
+  if (biomeResult.stderr) process.stderr.write(biomeResult.stderr);
+  process.stderr.write(
+    "\n[pre-commit] Commit blocked: Biome encountered syntax or formatting errors that could not be auto-fixed.\n",
+  );
+  process.exit(biomeResult.status ?? 1);
+}
+
+const checks = [
+  {
+    label: "TypeScript source contract check (scripts/check-source.ts)",
+    cmd: process.execPath,
+    args: ["--import", "tsx", "scripts/check-source.ts"],
+  },
+  {
+    label: "Source JSDoc contract check (scripts/check-source-docs.ts)",
+    cmd: process.execPath,
+    args: ["--import", "tsx", "scripts/check-source-docs.ts"],
+  },
+  {
+    label: "TypeScript compiler typecheck (tsc --noEmit)",
+    cmd: path.resolve("node_modules", ".bin", "tsc"),
+    args: ["-p", "tsconfig.json", "--noEmit"],
+  },
+];
+
+for (const check of checks) {
+  const result = spawnSync(check.cmd, check.args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    if (result.stdout) process.stderr.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+    process.stderr.write(
+      `\n[pre-commit] Commit blocked by ${check.label}.\nFix the reported offenses above and commit again.\n`,
+    );
+    process.exit(result.status ?? 1);
+  }
+}
+
+if (modifiedByBiome.length > 0) {
+  process.stderr.write(
+    "[pre-commit] All source and type checks passed after auto-formatting. Proceeding with commit.\n\n",
+  );
+}

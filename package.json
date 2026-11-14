@@ -5,13 +5,18 @@
   "description": "Declare TypeScript agent tools once, then derive contracts, validation and MCP bindings.",
   "type": "module",
   "scripts": {
+    "assets:generate": "node --import tsx scripts/generate-brand-assets.ts",
     "build": "tsc -p tsconfig.build.json",
-    "check": "npm run docs:check && npm run typecheck && npm run build && npm run test && npm run example:check && npm run consumer:check",
+    "check": "npm run format:check && npm run source:check && npm run docs:check && npm run typecheck && npm run build && npm run test && npm run example:check && npm run consumer:check",
     "demo": "node --import tsx src/demo.ts",
-    "docs": "node --import tsx scripts/generate-contract-docs.ts",
-    "docs:check": "node --import tsx scripts/generate-contract-docs.ts --check",
+    "docs": "node --import tsx scripts/generate-runtime-contracts.ts && node --import tsx scripts/generate-contract-docs.ts && node --import tsx scripts/generate-typed-docs.ts",
+    "docs:check": "node --import tsx scripts/check-source-docs.ts && node --import tsx scripts/generate-runtime-contracts.ts --check && node --import tsx scripts/generate-contract-docs.ts --check && node --import tsx scripts/generate-typed-docs.ts --check && node --import tsx scripts/check-openapi.ts",
     "consumer:check": "node --import tsx scripts/check-consumer.ts",
+    "format": "biome check --write",
+    "format:check": "biome check",
     "mcp": "node --import tsx src/mcp/stdio-server.ts",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "source:check": "node --import tsx scripts/check-source.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -21,8 +26,12 @@
     "example:check": "node dist/cli.js generate --project examples/hello/tsconfig.json --entry tools.ts --out examples/hello/schemas.json --check && node dist/cli.js generate --project examples/governed/tsconfig.json --entry tools.ts --out examples/governed/schemas.json --bindings examples/governed/bindings.ts --check && tsc -p examples/governed/tsconfig.build.json && node examples/governed/build/run.js"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.7",
     "@modelcontextprotocol/client": "2.4.0",
+    "@seriousme/openapi-schema-validator": "2.12.0",
     "@types/node": "^26.0.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "tsx": "^4.23.0",
     "vitest": "^4.1.0"
   },
@@ -51,6 +60,7 @@
     "tubular": "./dist/cli.js"
   },
   "files": [
+    "assets/brand/logo/tubular-logo-960.png",
     "dist",
     "src",
     "docs",
