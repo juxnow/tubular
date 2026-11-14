@@ -1,0 +1,389 @@
+{
+  "authoritySchemes": [
+    {
+      "description": "Time-bounded authority for named capabilities, resources, contexts, effects, and uses.",
+      "evidenceSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "leaseDigest": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "leaseId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "leaseId",
+          "leaseDigest"
+        ],
+        "type": "object"
+      },
+      "id": "capability-lease",
+      "promptGrantsAuthority": false
+    },
+    {
+      "description": "Approval issued by separately held human authority for one exact proposal digest.",
+      "evidenceSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "approvalId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "proposalDigest": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approvalId",
+          "proposalDigest",
+          "expiresAt"
+        ],
+        "type": "object"
+      },
+      "id": "exact-human-approval",
+      "promptGrantsAuthority": false
+    }
+  ],
+  "capabilities": [
+    {
+      "authority": {
+        "kind": "all-of",
+        "requirements": [
+          {
+            "claims": {
+              "binds": "proposal-digest"
+            },
+            "kind": "scheme",
+            "schemeRef": "exact-human-approval"
+          },
+          {
+            "claims": {
+              "exactContextBinding": true
+            },
+            "kind": "scheme",
+            "schemeRef": "capability-lease"
+          }
+        ]
+      },
+      "contexts": [
+        {
+          "acceptsKindRefs": [
+            "exact-manifest"
+          ],
+          "maxBytes": 1048576,
+          "maxItems": 64,
+          "minItems": 1,
+          "name": "working-context",
+          "required": true
+        }
+      ],
+      "description": "Append text to one logical workspace note through the trusted execution kernel.",
+      "effects": [
+        {
+          "disclosures": [],
+          "kindRef": "workspace-write",
+          "occurrence": "guaranteed",
+          "targetRef": "resource"
+        }
+      ],
+      "errors": [
+        {
+          "code": "APPROVAL_EXPIRED",
+          "description": "The exact approval or its challenge has expired.",
+          "retryability": "conditional"
+        },
+        {
+          "code": "APPROVAL_MISMATCH",
+          "description": "The stored approval does not match the executable proposal.",
+          "retryability": "never"
+        },
+        {
+          "code": "APPROVAL_REQUIRED",
+          "description": "A human has not approved this exact proposal digest.",
+          "retryability": "conditional"
+        },
+        {
+          "code": "APPROVAL_REVOKED",
+          "description": "Approval was revoked before the proposal could execute.",
+          "retryability": "never"
+        },
+        {
+          "code": "EXECUTION_OUTCOME_UNKNOWN",
+          "description": "Dispatch began but completion could not be proven.",
+          "retryability": "never"
+        },
+        {
+          "code": "EXECUTOR_NOT_FOUND",
+          "description": "No trusted effect adapter is bound to this contract.",
+          "retryability": "never"
+        },
+        {
+          "code": "INPUT_INVALID",
+          "description": "The input does not satisfy the closed runtime schema.",
+          "retryability": "conditional"
+        },
+        {
+          "code": "OUTPUT_INVALID",
+          "description": "The trusted adapter returned an invalid result.",
+          "retryability": "never"
+        },
+        {
+          "code": "POLICY_DENIED",
+          "description": "The active lease, context binding, resource scope, or effect ceiling denies the proposal.",
+          "retryability": "never"
+        },
+        {
+          "code": "PROPOSAL_LIMIT_REACHED",
+          "description": "The principal has reached its live proposal limit.",
+          "retryability": "conditional"
+        }
+      ],
+      "execution": {
+        "completion": "synchronous",
+        "idempotency": "invocation-id",
+        "outcomeEvidence": "receipt-required",
+        "unknownOutcome": "terminal-reconciliation-required"
+      },
+      "id": "workspace.note.append",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "resource": {
+            "description": "Logical workspace resource to update",
+            "maxLength": 512,
+            "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to append after exact human approval",
+            "maxLength": 4000,
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "text"
+        ],
+        "type": "object"
+      },
+      "lifecycleRef": "proposal-execution",
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "appendedCharacters": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "entryCount": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "resource": {
+            "maxLength": 512,
+            "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "resource",
+          "revision",
+          "entryCount",
+          "appendedCharacters"
+        ],
+        "type": "object"
+      },
+      "targets": [
+        {
+          "fromInput": "/resource",
+          "name": "resource",
+          "required": true,
+          "resourceKindRef": "workspace-resource"
+        }
+      ],
+      "title": "Append a workspace note",
+      "version": "1.0.0"
+    }
+  ],
+  "contextKinds": [
+    {
+      "binding": "exact-digest",
+      "classifications": [
+        "internal",
+        "private",
+        "public",
+        "secret"
+      ],
+      "description": "An explicitly selected, bounded context manifest with recorded provenance and omissions.",
+      "disclosurePolicies": [
+        "explicit-grant",
+        "local-only",
+        "shareable"
+      ],
+      "id": "exact-manifest",
+      "integrity": "sha-256",
+      "provenance": "required",
+      "recordsOmissions": true,
+      "selection": "explicit"
+    }
+  ],
+  "description": "A provider-neutral, bounded-agency runtime described by a Port Authority manifest.",
+  "digest": "e56be50bf98a7e2716c116edbe05c103bb6f03163791227eb27c71aacc6551f4",
+  "effectKinds": [
+    {
+      "description": "Delete or irreversibly replace state.",
+      "externalInteraction": "write",
+      "id": "destructive",
+      "reversibility": "irreversible",
+      "state": "delete"
+    },
+    {
+      "description": "Create local draft state without an external write.",
+      "externalInteraction": "none",
+      "id": "draft",
+      "reversibility": "reversible",
+      "state": "create"
+    },
+    {
+      "description": "Write to a system outside the bounded runtime.",
+      "externalInteraction": "write",
+      "id": "external-write",
+      "reversibility": "unknown",
+      "state": "update"
+    },
+    {
+      "description": "Read local state without changing it or disclosing it externally.",
+      "externalInteraction": "none",
+      "id": "read",
+      "reversibility": "not-applicable",
+      "state": "read"
+    },
+    {
+      "description": "Change a resource inside the bounded workspace.",
+      "externalInteraction": "none",
+      "id": "workspace-write",
+      "reversibility": "compensatable",
+      "state": "update"
+    }
+  ],
+  "extensions": {},
+  "id": "port_authority_e56be50bf98a7e2716c116ed",
+  "lifecycles": [
+    {
+      "description": "A proposal is evaluated, optionally approved, dispatched, and reconciled to evidence.",
+      "id": "proposal-execution",
+      "initialState": "proposed",
+      "states": [
+        {
+          "id": "approval-required",
+          "terminal": false
+        },
+        {
+          "id": "executing",
+          "terminal": false
+        },
+        {
+          "id": "failed",
+          "terminal": true
+        },
+        {
+          "id": "outcome-unknown",
+          "terminal": true
+        },
+        {
+          "id": "proposed",
+          "terminal": false
+        },
+        {
+          "id": "ready",
+          "terminal": false
+        },
+        {
+          "id": "rejected",
+          "terminal": true
+        },
+        {
+          "id": "succeeded",
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "from": "approval-required",
+          "on": "approval-accepted",
+          "to": "ready"
+        },
+        {
+          "from": "executing",
+          "on": "completion-unproven",
+          "to": "outcome-unknown"
+        },
+        {
+          "from": "executing",
+          "on": "failure-proven",
+          "to": "failed"
+        },
+        {
+          "from": "executing",
+          "on": "receipt-verified",
+          "to": "succeeded"
+        },
+        {
+          "from": "proposed",
+          "on": "policy-allows",
+          "to": "ready"
+        },
+        {
+          "from": "proposed",
+          "on": "policy-denies",
+          "to": "rejected"
+        },
+        {
+          "from": "proposed",
+          "on": "policy-requires-approval",
+          "to": "approval-required"
+        },
+        {
+          "from": "ready",
+          "on": "dispatch-started",
+          "to": "executing"
+        }
+      ]
+    }
+  ],
+  "name": "totally-tubular.reference-runtime",
+  "requiredExtensions": [],
+  "resourceKinds": [
+    {
+      "description": "A logical workspace resource resolved by the trusted runtime.",
+      "id": "workspace-resource",
+      "identitySchema": {
+        "pattern": "^workspace://[a-z0-9][a-z0-9._/-]{0,500}$",
+        "type": "string"
+      },
+      "parentKindRefs": []
+    }
+  ],
+  "scopeKinds": [
+    "external-resource",
+    "private",
+    "project"
+  ],
+  "specification": "port-authority/v0",
+  "title": "Totally Tubular reference runtime",
+  "version": "0.1.0"
+}

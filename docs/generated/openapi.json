@@ -1,0 +1,276 @@
+{
+  "info": {
+    "description": "Documentation-only projection of a Port Authority. These paths are not HTTP endpoints.",
+    "title": "Totally Tubular reference runtime capability documentation",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/tools/workspace/note/append": {
+      "post": {
+        "description": "Append text to one logical workspace note through the trusted execution kernel.",
+        "operationId": "workspace_note_append",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "resource": {
+                    "description": "Logical workspace resource to update",
+                    "maxLength": 512,
+                    "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+                    "type": "string"
+                  },
+                  "text": {
+                    "description": "Text to append after exact human approval",
+                    "maxLength": 4000,
+                    "minLength": 1,
+                    "pattern": "\\S",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "resource",
+                  "text"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "appendedCharacters": {
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "entryCount": {
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "resource": {
+                      "maxLength": 512,
+                      "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+                      "type": "string"
+                    },
+                    "revision": {
+                      "maximum": 9007199254740991,
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "resource",
+                    "revision",
+                    "entryCount",
+                    "appendedCharacters"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Documentation projection of the successful capability result"
+          }
+        },
+        "summary": "Append a workspace note",
+        "x-documentation-projection": true,
+        "x-network-endpoint": false,
+        "x-port-authority-capability": {
+          "authority": {
+            "kind": "all-of",
+            "requirements": [
+              {
+                "claims": {
+                  "binds": "proposal-digest"
+                },
+                "kind": "scheme",
+                "schemeRef": "exact-human-approval"
+              },
+              {
+                "claims": {
+                  "exactContextBinding": true
+                },
+                "kind": "scheme",
+                "schemeRef": "capability-lease"
+              }
+            ]
+          },
+          "contexts": [
+            {
+              "acceptsKindRefs": [
+                "exact-manifest"
+              ],
+              "maxBytes": 1048576,
+              "maxItems": 64,
+              "minItems": 1,
+              "name": "working-context",
+              "required": true
+            }
+          ],
+          "description": "Append text to one logical workspace note through the trusted execution kernel.",
+          "effects": [
+            {
+              "disclosures": [],
+              "kindRef": "workspace-write",
+              "occurrence": "guaranteed",
+              "targetRef": "resource"
+            }
+          ],
+          "errors": [
+            {
+              "code": "APPROVAL_EXPIRED",
+              "description": "The exact approval or its challenge has expired.",
+              "retryability": "conditional"
+            },
+            {
+              "code": "APPROVAL_MISMATCH",
+              "description": "The stored approval does not match the executable proposal.",
+              "retryability": "never"
+            },
+            {
+              "code": "APPROVAL_REQUIRED",
+              "description": "A human has not approved this exact proposal digest.",
+              "retryability": "conditional"
+            },
+            {
+              "code": "APPROVAL_REVOKED",
+              "description": "Approval was revoked before the proposal could execute.",
+              "retryability": "never"
+            },
+            {
+              "code": "EXECUTION_OUTCOME_UNKNOWN",
+              "description": "Dispatch began but completion could not be proven.",
+              "retryability": "never"
+            },
+            {
+              "code": "EXECUTOR_NOT_FOUND",
+              "description": "No trusted effect adapter is bound to this contract.",
+              "retryability": "never"
+            },
+            {
+              "code": "INPUT_INVALID",
+              "description": "The input does not satisfy the closed runtime schema.",
+              "retryability": "conditional"
+            },
+            {
+              "code": "OUTPUT_INVALID",
+              "description": "The trusted adapter returned an invalid result.",
+              "retryability": "never"
+            },
+            {
+              "code": "POLICY_DENIED",
+              "description": "The active lease, context binding, resource scope, or effect ceiling denies the proposal.",
+              "retryability": "never"
+            },
+            {
+              "code": "PROPOSAL_LIMIT_REACHED",
+              "description": "The principal has reached its live proposal limit.",
+              "retryability": "conditional"
+            }
+          ],
+          "execution": {
+            "completion": "synchronous",
+            "idempotency": "invocation-id",
+            "outcomeEvidence": "receipt-required",
+            "unknownOutcome": "terminal-reconciliation-required"
+          },
+          "id": "workspace.note.append",
+          "inputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "resource": {
+                "description": "Logical workspace resource to update",
+                "maxLength": 512,
+                "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+                "type": "string"
+              },
+              "text": {
+                "description": "Text to append after exact human approval",
+                "maxLength": 4000,
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              }
+            },
+            "required": [
+              "resource",
+              "text"
+            ],
+            "type": "object"
+          },
+          "lifecycleRef": "proposal-execution",
+          "outputSchema": {
+            "additionalProperties": false,
+            "properties": {
+              "appendedCharacters": {
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "entryCount": {
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "resource": {
+                "maxLength": 512,
+                "pattern": "^workspace://[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:/(?!\\.{1,2}(?:/|$))[A-Za-z0-9._~-]+)*$",
+                "type": "string"
+              },
+              "revision": {
+                "maximum": 9007199254740991,
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "resource",
+              "revision",
+              "entryCount",
+              "appendedCharacters"
+            ],
+            "type": "object"
+          },
+          "targets": [
+            {
+              "fromInput": "/resource",
+              "name": "resource",
+              "required": true,
+              "resourceKindRef": "workspace-resource"
+            }
+          ],
+          "title": "Append a workspace note",
+          "version": "1.0.0"
+        },
+        "x-port-authority-source": {
+          "digest": "e56be50bf98a7e2716c116edbe05c103bb6f03163791227eb27c71aacc6551f4",
+          "id": "port_authority_e56be50bf98a7e2716c116ed",
+          "specification": "port-authority/v0",
+          "version": "0.1.0"
+        },
+        "x-totally-tubular-approval": "exact-human",
+        "x-totally-tubular-effect": "workspace-write",
+        "x-totally-tubular-tool": true,
+        "x-totally-tubular-tool-name": "workspace.note.append"
+      }
+    }
+  },
+  "servers": [],
+  "x-documentation-projection": true,
+  "x-network-endpoint": false,
+  "x-port-authority-source": {
+    "digest": "e56be50bf98a7e2716c116edbe05c103bb6f03163791227eb27c71aacc6551f4",
+    "id": "port_authority_e56be50bf98a7e2716c116ed",
+    "specification": "port-authority/v0",
+    "version": "0.1.0"
+  }
+}

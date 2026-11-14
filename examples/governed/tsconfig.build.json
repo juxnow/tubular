@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.json",
+  "files": ["tools.ts", "bindings.ts", "run.ts"]
+}
