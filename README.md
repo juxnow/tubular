@@ -64,6 +64,8 @@ The hello example retains the original read-only API. The governed example gener
 
 `docs` regenerates checked-in documentation. The examples build and regenerate example files; `docs:check` checks documentation without rewriting it.
 
+See [test scenarios and boundaries](docs/TESTING.md) for source-derived fixtures, seeded data, in-memory generation, and the separate packed-consumer check.
+
 ## Declare a capability
 
 ```ts

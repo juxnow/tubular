@@ -1,53 +1,33 @@
-import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   type AuthorizationDecision,
   bindTool,
   createToolRuntime,
   defineTool,
 } from "../src/typed-tools/index.js";
-import { compileToolSchemas } from "../src/typegen/index.js";
+import { compileToolSchemas, type ToolSchemas } from "../src/typegen/index.js";
+import {
+  type GreetingInput,
+  type GreetingOutput,
+  greet,
+  type HostContext,
+} from "./fixtures/greeting-tools.js";
+import { greetingScenario, scenarioSeeds } from "./fixtures/scenarios.js";
 
-/** Greeting arguments used to test schema binding, input rejection, and immutable authorization snapshots. */
-interface GreetingInput {
-  /** Display name inserted into the validated greeting output. */
-  name: string;
-  /** Optional punctuation switch; omission produces the ordinary greeting. */
-  excited?: boolean;
-}
-/** Closed successful greeting output; unexpected keys or nonstring text must be rejected. */
-interface GreetingOutput {
-  /** Rendered greeting text after the handler has applied the requested punctuation. */
-  greeting: string;
-}
-/** Trusted fixture tenant context, independent of model-supplied tool arguments. */
-interface HostContext {
-  /** Host-selected tenant label, never accepted from the tool's input schema. */
-  tenant: string;
-}
-
-// This function is both the actual handler and the compiler's schema source.
-/** Render a fixture greeting using validated arguments and the trusted tenant context. */
-export function greet(input: GreetingInput, context: HostContext): GreetingOutput {
-  return { greeting: `${context.tenant}: Hello, ${input.name}${input.excited ? "!" : "."}` };
-}
-
-const schemaMap = {
-  greet: {
-    inputSchema: {
-      type: "object",
-      properties: { name: { type: "string" }, excited: { type: "boolean" } },
-      required: ["name"],
-      additionalProperties: false,
-    },
-    outputSchema: {
-      type: "object",
-      properties: { greeting: { type: "string" } },
-      required: ["greeting"],
-      additionalProperties: false,
-    },
-  },
+let schemaMap: {
+  /** Contracts compiled from the real fixture handler before this suite runs. */
+  greet: ToolSchemas;
 };
+beforeAll(() => {
+  const schemas = compileToolSchemas({
+    tsconfigPath: "test/fixtures/tsconfig.json",
+    entryFile: "greeting-tools.ts",
+    functionNames: ["greet"],
+  });
+  const greet = schemas["greet"];
+  if (!greet) throw new Error("Missing greeting fixture schema");
+  schemaMap = { greet };
+});
 
 describe("typed tool runtime", () => {
   it("uses captured schemas for renamed bindings and refuses a replacement schema map", async () => {
@@ -69,34 +49,40 @@ describe("typed tool runtime", () => {
       }),
     ).toThrow(/separate schema map/);
   });
-  it("compiles schemas from the actual handler and executes against trusted context", async () => {
-    const schemas = compileToolSchemas({
-      tsconfigPath: path.resolve("tsconfig.json"),
-      entryFile: "test/typed-tools.test.ts",
-      functionNames: ["greet"],
-    });
-    const authorize = vi.fn(() => "ALLOW" as const);
-    const runtime = createToolRuntime({
-      definitions: [
-        defineTool({ name: "greet", description: "Greet someone", effect: "read", handler: greet }),
-      ],
-      schemas,
-      authorize,
-    });
-    expect(runtime.list()[0]?.inputSchema).toEqual(schemas["greet"]?.inputSchema);
-    expect(
-      await runtime.invoke("greet", { name: "Tony", excited: true }, { tenant: "JUX" }),
-    ).toEqual({ status: "success", output: { greeting: "JUX: Hello, Tony!" } });
-    expect(authorize).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: { tenant: "JUX" },
-        input: { name: "Tony", excited: true },
-      }),
-    );
-    expect(
-      await runtime.invoke("greet", { name: "Tony", tenant: "imposter" }, { tenant: "JUX" }),
-    ).toMatchObject({ status: "invalid_input" });
-  });
+  it.each(scenarioSeeds)(
+    "executes the actual compiled handler against trusted context (seed %i)",
+    async (seed) => {
+      const { input, context } = greetingScenario(seed);
+      const schemas = schemaMap;
+      const authorize = vi.fn(() => "ALLOW" as const);
+      const runtime = createToolRuntime({
+        definitions: [
+          defineTool({
+            name: "greet",
+            description: "Greet someone",
+            effect: "read",
+            handler: greet,
+          }),
+        ],
+        schemas,
+        authorize,
+      });
+      expect(runtime.list()[0]?.inputSchema).toEqual(schemas["greet"]?.inputSchema);
+      expect(await runtime.invoke("greet", input, context)).toEqual({
+        status: "success",
+        output: { greeting: `${context.tenant}: Hello, ${input.name}${input.excited ? "!" : "."}` },
+      });
+      expect(authorize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          input,
+        }),
+      );
+      expect(
+        await runtime.invoke("greet", { ...input, tenant: "imposter" }, context),
+      ).toMatchObject({ status: "invalid_input" });
+    },
+  );
 
   it.each<AuthorizationDecision>(["ASK", "DENY"])(
     "does not run a handler on %s",
@@ -260,7 +246,7 @@ describe("typed tool runtime", () => {
       schemas,
       authorize: () => "ALLOW",
     });
-    schemas.greet.inputSchema.required.length = 0;
+    schemas.greet.inputSchema.required = [];
     expect(Object.isFrozen(runtime.list())).toBe(true);
     expect(Object.isFrozen(runtime.list()[0]?.inputSchema)).toBe(true);
     expect(await runtime.invoke("greet", {}, { tenant: "JUX" })).toMatchObject({

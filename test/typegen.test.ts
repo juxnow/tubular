@@ -1,46 +1,40 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   compileToolBindings,
   compileToolSchemas,
   compileTypeSchemas,
+  createSchemaCompiler,
 } from "../src/typegen/index.js";
 
-const fixtures: string[] = [];
-/** Create a temporary strict TypeScript project so compiler tests exercise real source declarations. */
-function fixture(source: string): {
-  /** Absolute path to the temporary strict compiler configuration. */
-  tsconfigPath: string;
-  /** Source entry filename relative to the fixture configuration directory. */
-  entryFile: string;
-} {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "tubular-types-"));
-  fixtures.push(dir);
-  const tsconfigPath = path.join(dir, "tsconfig.json");
-  writeFileSync(
-    tsconfigPath,
-    JSON.stringify({
-      compilerOptions: {
-        strict: true,
-        target: "ES2022",
-        module: "NodeNext",
-        moduleResolution: "NodeNext",
-        skipLibCheck: true,
-        types: [],
-      },
-      files: ["models.ts"],
-    }),
-  );
-  writeFileSync(path.join(dir, "models.ts"), source);
-  return { tsconfigPath, entryFile: "models.ts" };
-}
-afterEach(() => {
-  for (const dir of fixtures.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
+import { compilerProject as fixture } from "./fixtures/compiler-project.js";
 
 describe("TypeScript schema compiler", () => {
+  it("resolves virtual dependencies and holds one source snapshot until explicitly rebuilt", () => {
+    const dependency = "export interface Query { term: string }";
+    const input = fixture(
+      `import type { Query } from "./query.js";
+      export function search(input: Query): { result: string } { return { result: input.term } }`,
+      {},
+      { "query.ts": dependency },
+    );
+    const compiler = createSchemaCompiler(input);
+    const schemas = compiler.compileTools(["search"]);
+    const bindings = compiler.compileBindings(["search"], "bindings.ts");
+    expect(schemas["search"]?.inputSchema.required).toEqual(["term"]);
+    expect(bindings).toContain('from "./models.js"');
+    input.migrate("query.ts", dependency, "export interface Query { term: string; limit: number }");
+    expect(compiler.compileTools(["search"])).toEqual(schemas);
+    expect(compiler.compileBindings(["search"], "bindings.ts")).toBe(bindings);
+    const changed = createSchemaCompiler(input);
+    expect(changed.compileTools(["search"])["search"]?.inputSchema.required).toEqual([
+      "limit",
+      "term",
+    ]);
+    expect(changed.compileBindings(["search"], "bindings.ts")).not.toBe(bindings);
+    expect(input.writes).toEqual([]);
+  });
+
   it("merges object intersections and preserves readonly arrays and discriminated union members", () => {
     const input = fixture(`
       interface Base { id: string; count?: number }
@@ -74,15 +68,18 @@ describe("TypeScript schema compiler", () => {
       functionNames: ["search"],
       outputFile: path.join(path.dirname(input.tsconfigPath), "bindings.ts"),
     };
-    const generated = compileToolBindings(options);
+    const compiler = createSchemaCompiler(input);
+    const generated = compiler.compileBindings(options.functionNames, options.outputFile);
     expect(generated).toContain('import { "search" as handler0 } from "./models.js"');
     expect(generated).toContain("bindTool(handler0");
     expect(generated).toContain('"sourceDigest"');
-    expect(compileToolBindings(options)).toBe(generated);
-    writeFileSync(
-      path.join(path.dirname(input.tsconfigPath), "models.ts"),
+    expect(compiler.compileBindings(options.functionNames, options.outputFile)).toBe(generated);
+    input.migrate(
+      "models.ts",
+      source,
       source.replace("input.query + context.tenant", "context.tenant + input.query"),
     );
+    expect(compiler.compileBindings(options.functionNames, options.outputFile)).toBe(generated);
     expect(compileToolBindings(options)).not.toBe(generated);
     expect(() =>
       compileToolBindings({
@@ -102,7 +99,8 @@ describe("TypeScript schema compiler", () => {
         values: Array<{ value: number | null }>;
       }
     `);
-    const schema = compileTypeSchemas({ ...input, typeNames: ["Input"] });
+    const compiler = createSchemaCompiler(input);
+    const schema = compiler.compileTypes(["Input"]);
     expect(schema).toEqual({
       Input: {
         type: "object",
@@ -130,32 +128,20 @@ describe("TypeScript schema compiler", () => {
         },
       },
     });
-    expect(compileTypeSchemas({ ...input, typeNames: ["Input"] })).toEqual(schema);
+    expect(compiler.compileTypes(["Input"])).toEqual(schema);
   });
 
   it("rejects projects without strict null checking rather than erasing nullability", () => {
-    const input = fixture("export interface Input { value: string | null }");
-    writeFileSync(
-      input.tsconfigPath,
-      JSON.stringify({
-        compilerOptions: { strictNullChecks: false, types: [] },
-        files: ["models.ts"],
-      }),
-    );
+    const input = fixture("export interface Input { value: string | null }", {
+      strictNullChecks: false,
+    });
     expect(() => compileTypeSchemas({ ...input, typeNames: ["Input"] })).toThrow(
       /strictNullChecks must be enabled/,
     );
   });
 
   it("checks TypeScript diagnostics even when the project disables checking", () => {
-    const input = fixture("export interface Input { value: MissingType }");
-    writeFileSync(
-      input.tsconfigPath,
-      JSON.stringify({
-        compilerOptions: { strict: true, noCheck: true, types: [] },
-        files: ["models.ts"],
-      }),
-    );
+    const input = fixture("export interface Input { value: MissingType }", { noCheck: true });
     expect(() => compileTypeSchemas({ ...input, typeNames: ["Input"] })).toThrow(
       /Cannot find name/,
     );
@@ -214,23 +200,12 @@ describe("TypeScript schema compiler", () => {
       export function generic<T>(input: { value: T }): T { return input.value }
       export function badResult(input: { name: string }): any { return input }
     `);
-    expect(() => compileTypeSchemas({ ...input, typeNames: ["Missing"] })).toThrow(
-      /Export not found/,
-    );
-    expect(() => compileToolSchemas({ ...input, functionNames: ["scalar"] })).toThrow(
-      /input must be an object/,
-    );
-    expect(() => compileToolSchemas({ ...input, functionNames: ["two"] })).toThrow(
-      /one required input/,
-    );
-    expect(() => compileToolSchemas({ ...input, functionNames: ["optional"] })).toThrow(
-      /one required input/,
-    );
-    expect(() => compileToolSchemas({ ...input, functionNames: ["generic"] })).toThrow(
-      /no type parameters/,
-    );
-    expect(() => compileToolSchemas({ ...input, functionNames: ["badResult"] })).toThrow(
-      /Unsupported type/,
-    );
+    const compiler = createSchemaCompiler(input);
+    expect(() => compiler.compileTypes(["Missing"])).toThrow(/Export not found/);
+    expect(() => compiler.compileTools(["scalar"])).toThrow(/input must be an object/);
+    expect(() => compiler.compileTools(["two"])).toThrow(/one required input/);
+    expect(() => compiler.compileTools(["optional"])).toThrow(/one required input/);
+    expect(() => compiler.compileTools(["generic"])).toThrow(/no type parameters/);
+    expect(() => compiler.compileTools(["badResult"])).toThrow(/Unsupported type/);
   });
 });

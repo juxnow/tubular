@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AapiV0ContextItem,
   type AapiV0Invocation,
-  type AapiV0Principal,
   type AapiV0Result,
-  type AapiV0Scope,
   type AapiV0SourceReference,
   aapiV0ContextItemToPerspective,
   aapiV0InvocationToPerspective,
@@ -19,36 +17,10 @@ import {
   perspectiveScopeToAapiV0,
   perspectiveSourceToAapiV0,
 } from "../src/perspective/aapi-v0.js";
-import { PERSPECTIVE_PROTOCOL, type PerspectiveReference } from "../src/perspective/definition.js";
+import { compatibilityScenario, scenarioSeeds } from "./fixtures/scenarios.js";
 
-const perspective: PerspectiveReference = {
-  id: `perspective_${"a".repeat(24)}`,
-  digest: "a".repeat(64),
-  version: "0.1.0",
-  specification: PERSPECTIVE_PROTOCOL,
-};
-
-const principal: AapiV0Principal = {
-  id: "principal:mj",
-  externalIdentity: {
-    provider: "discord",
-    subject: "123",
-  },
-};
-
-const scope: AapiV0Scope = {
-  id: "project:test",
-  kind: "project",
-};
-
-const source: AapiV0SourceReference = {
-  provider: "discord",
-  resourceType: "channel",
-  resourceId: "channel-1",
-  parentResourceId: "guild-1",
-};
-
-describe("AAPI v0 clean-room compatibility", () => {
+describe.each(scenarioSeeds)("AAPI v0 clean-room compatibility (seed %i)", (seed) => {
+  const { perspective, principal, scope, source, contextItem } = compatibilityScenario(seed);
   it("rejects a Perspective reference whose id does not bind its digest", () => {
     expect(() =>
       aapiV0InvocationToPerspective(
@@ -67,19 +39,6 @@ describe("AAPI v0 clean-room compatibility", () => {
   });
 
   it("round-trips every implemented supporting shape", () => {
-    const contextItem: AapiV0ContextItem = {
-      id: "message-1",
-      authorLabel: "Alex",
-      occurredAt: "2026-08-27T12:00:00.000Z",
-      content: "hello from discord",
-      source: {
-        provider: "discord",
-        resourceType: "message",
-        resourceId: "message-1",
-        parentResourceId: "channel-1",
-      },
-    };
-
     expect(perspectivePrincipalToAapiV0(aapiV0PrincipalToPerspective(principal))).toEqual(
       principal,
     );
@@ -118,19 +77,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       input: {
         audience: "MJ",
         objective: "Catch up.",
-        items: [
-          {
-            id: "message-1",
-            authorLabel: "Alex",
-            occurredAt: "2026-08-27T12:00:00.000Z",
-            content: "hello from discord",
-            source: {
-              provider: "discord",
-              resourceType: "message",
-              resourceId: "message-1",
-            },
-          },
-        ],
+        items: [contextItem],
       },
       source,
     };

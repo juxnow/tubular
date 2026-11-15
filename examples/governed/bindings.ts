@@ -71,6 +71,6 @@ const binding0 = bindTool(handler0, {
 }, {
   "entry": "tools.ts",
   "exportName": "appendNote",
-  "sourceDigest": "0661a035adde3db5daa29271046feedf5175d4e25d4659af0394fc987f839aa3"
+  "sourceDigest": "3d8ee10faf17598ebb5fb4108e53a7fca9a475dd2c8fa25f22a0708cfda9504c"
 });
 export { binding0 as "appendNote" };

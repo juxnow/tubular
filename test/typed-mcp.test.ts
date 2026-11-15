@@ -1,45 +1,26 @@
-import { resolve } from "node:path";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createTypedMcpServer } from "../src/typed-mcp/index.js";
 import { createToolRuntime, defineTool } from "../src/typed-tools/index.js";
-import { compileToolSchemas } from "../src/typegen/index.js";
+import { compileToolSchemas, type ToolSchemas } from "../src/typegen/index.js";
 
-/** Model-facing greeting arguments compiled into native MCP input schema. */
-interface Input {
-  /** Greeting target supplied by the model; authority is carried separately in host context. */
-  readonly text: string;
-}
-/** Validated greeting response used to test native MCP output and structured-content behavior. */
-interface Output {
-  /** Display greeting released only after output validation succeeds. */
-  readonly greeting: string;
-}
-/** Trusted fixture identity and policy decision resolved outside model input. */
-interface HostContext {
-  /** Host-selected fixture identity that extra model input fields cannot replace. */
-  readonly principal: string;
-  /** Trusted fixture decision returned by the host authorization callback; ASK never dispatches. */
-  readonly decision: "ALLOW" | "ASK" | "DENY";
-}
+import {
+  generatedGreet,
+  type McpHostContext as HostContext,
+  type McpInput as Input,
+  type McpOutput as Output,
+} from "./fixtures/greeting-tools.js";
 
-/** Produce a greeting from validated arguments and independently supplied host context. */
-export function generatedGreet(input: Input, context: HostContext): Output {
-  return { greeting: `${input.text}, ${context.principal}` };
-}
-
-const inputSchema = {
-  type: "object",
-  properties: { text: { type: "string" } },
-  required: ["text"],
-  additionalProperties: false,
-} as const;
-const outputSchema = {
-  type: "object",
-  properties: { greeting: { type: "string" } },
-  required: ["greeting"],
-  additionalProperties: false,
-} as const;
+let schema: ToolSchemas;
+beforeAll(() => {
+  const compiled = compileToolSchemas({
+    tsconfigPath: "test/fixtures/tsconfig.json",
+    entryFile: "greeting-tools.ts",
+    functionNames: ["generatedGreet"],
+  })["generatedGreet"];
+  if (!compiled) throw new Error("Missing MCP greeting fixture schema");
+  schema = compiled;
+});
 
 describe("typed MCP adapter", () => {
   it("preserves object-only output unions in MCP discovery and validation", async () => {
@@ -59,7 +40,7 @@ describe("typed MCP adapter", () => {
           handler: (_input: Input, _context: HostContext) => ({ kind: "found", value: "yes" }),
         }),
       ],
-      schemas: { lookup: { inputSchema, outputSchema: output } },
+      schemas: { lookup: { inputSchema: schema.inputSchema, outputSchema: output } },
       authorize: () => "ALLOW",
     });
     const server = createTypedMcpServer({
@@ -84,11 +65,7 @@ describe("typed MCP adapter", () => {
     }
   });
   it("runs a generated TypeScript contract through the MCP client and server", async () => {
-    const schemas = compileToolSchemas({
-      tsconfigPath: resolve("tsconfig.json"),
-      entryFile: resolve("test/typed-mcp.test.ts"),
-      functionNames: ["generatedGreet"],
-    });
+    const schemas = { generatedGreet: schema };
     const runtime = createToolRuntime<HostContext>({
       definitions: [
         defineTool<Input, Output, HostContext>({
@@ -124,7 +101,7 @@ describe("typed MCP adapter", () => {
       await client.close();
       await server.close();
     }
-  }, 15_000);
+  });
 
   it("advertises the real schemas and runs calls with host authority", async () => {
     let called = 0;
@@ -143,7 +120,7 @@ describe("typed MCP adapter", () => {
           },
         }),
       ],
-      schemas: { greet: { inputSchema, outputSchema } },
+      schemas: { greet: schema },
       authorize: ({ context }) => context.decision,
     });
     const host: HostContext = { principal: "trusted-host", decision: "ALLOW" };
@@ -155,7 +132,11 @@ describe("typed MCP adapter", () => {
     try {
       const listing = await client.listTools();
       expect(listing.tools).toHaveLength(1);
-      expect(listing.tools[0]).toMatchObject({ name: "greet", inputSchema, outputSchema });
+      expect(listing.tools[0]).toMatchObject({
+        name: "greet",
+        inputSchema: schema.inputSchema,
+        outputSchema: schema.outputSchema,
+      });
       const response = await client.callTool({ name: "greet", arguments: { text: "hello" } });
       expect(response.isError).not.toBe(true);
       expect(response.structuredContent).toEqual({ greeting: "hello, trusted-host" });
@@ -188,7 +169,7 @@ describe("typed MCP adapter", () => {
           },
         }),
       ],
-      schemas: { greet: { inputSchema, outputSchema } },
+      schemas: { greet: schema },
       authorize: ({ context }) => context.decision,
     });
     const server = createTypedMcpServer({ runtime, context: { principal: "trusted", decision } });
@@ -220,7 +201,7 @@ describe("typed MCP adapter", () => {
           },
         }),
       ],
-      schemas: { greet: { inputSchema, outputSchema } },
+      schemas: { greet: schema },
       authorize: () => "ALLOW",
     });
     const server = createTypedMcpServer({
@@ -255,7 +236,7 @@ describe("typed MCP adapter", () => {
           },
         }),
       ],
-      schemas: { greet: { inputSchema: { type: "string" }, outputSchema } },
+      schemas: { greet: { inputSchema: { type: "string" }, outputSchema: schema.outputSchema } },
       authorize: () => "DENY",
     });
     expect(() =>

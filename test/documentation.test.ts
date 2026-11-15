@@ -1,154 +1,140 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { Ajv2020 } from "ajv/dist/2020.js";
 import formats from "ajv-formats";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { assertOpenApi31 } from "../scripts/openapi-validation.js";
 import { validateSchema } from "../src/type-validation/index.js";
 import { createTypedMcpServer } from "../src/typed-mcp/index.js";
 import { projectCapabilityManifest, projectTypedOpenApi } from "../src/typed-projections/index.js";
 import { bindTool, createToolRuntime } from "../src/typed-tools/index.js";
-import { compileToolSchemas, compileTypeSchemas } from "../src/typegen/index.js";
+import { compileToolSchemas, compileTypeSchemas, type ToolSchemas } from "../src/typegen/index.js";
+import { compilerProject } from "./fixtures/compiler-project.js";
 import { documentedSearch } from "./fixtures/documented-tools.js";
+import { scenarioSeeds, searchScenario } from "./fixtures/scenarios.js";
 
-const directories: string[] = [];
-afterEach(() => {
-  for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
-});
-
-/** Compile a small independent model to exercise annotation diagnostics without executing it. */
+/** Compile a strict virtual model to exercise annotation diagnostics without disk mutations. */
 function compile(source: string) {
-  const directory = mkdtempSync(path.join(tmpdir(), "tubular-doc-tags-"));
-  directories.push(directory);
-  writeFileSync(path.join(directory, "models.ts"), source);
-  writeFileSync(
-    path.join(directory, "tsconfig.json"),
-    JSON.stringify({
-      compilerOptions: { strict: true, types: [], skipLibCheck: true },
-      files: ["models.ts"],
-    }),
-  );
-  return compileTypeSchemas({
-    tsconfigPath: path.join(directory, "tsconfig.json"),
-    entryFile: "models.ts",
-    typeNames: ["Input"],
-  })["Input"];
+  return compileTypeSchemas({ ...compilerProject(source), typeNames: ["Input"] })["Input"];
 }
 
 describe("source documentation as executable contracts", () => {
-  it("carries source descriptions and constraints through binding, validation, MCP, and OpenAPI 3.1", async () => {
-    const schema = compileToolSchemas({
-      tsconfigPath: "tsconfig.json",
-      entryFile: "test/fixtures/documented-tools.ts",
+  let schema: ToolSchemas;
+  beforeAll(() => {
+    const compiled = compileToolSchemas({
+      tsconfigPath: "test/fixtures/tsconfig.json",
+      entryFile: "documented-tools.ts",
       functionNames: ["documentedSearch"],
     })["documentedSearch"];
-    if (schema === undefined) throw new Error("Missing compiled tool");
-    expect(schema.inputSchema).toMatchObject({
-      title: "Documented query",
-      description: expect.stringContaining("scope is selected by the host"),
-      properties: {
-        id: { format: "uuid" },
-        query: { minLength: 2, maxLength: 8, pattern: "^[a-z]+$", examples: ["hello"] },
-        count: { type: "integer", minimum: 1, maximum: 5, default: 2 },
-        label: { maxLength: 3, default: null },
-        tags: { minItems: 1, maxItems: 2 },
-      },
-    });
-    expect(schema.outputSchema.description).toContain("host-selected prefix");
-    const handler = vi.fn(documentedSearch);
-    const definition = bindTool(handler, schema, {
-      entry: "documented-tools.ts",
-      exportName: "documentedSearch",
-      sourceDigest: "a".repeat(64),
-    })({ effect: "read" });
-    const runtime = createToolRuntime({ definitions: [definition], authorize: () => "ALLOW" });
-    const input = { id: "123e4567-e89b-12d3-a456-426614174000", query: "hello", tags: ["a"] };
-    expect(await runtime.invoke("documentedSearch", input, { prefix: "trusted" })).toMatchObject({
-      status: "success",
-      output: { value: "trusted:hello", count: 2, label: null },
-    });
-    expect(handler.mock.calls[0]?.[0]).not.toHaveProperty("count");
-    const ajv = new Ajv2020({ strict: false });
-    formats.default(ajv);
-    const standardValidation = ajv.compile(schema.inputSchema);
-    for (const sample of [
-      input,
-      { ...input, count: 5, label: null },
-      { ...input, count: 1.5 },
-      { ...input, count: 0 },
-      { ...input, count: 6 },
-      { ...input, label: "long" },
-      { ...input, tags: [] },
-      { ...input, tags: ["a", "a", "a"] },
-      { ...input, id: "forged" },
-      { ...input, query: "HELLO" },
-      { ...input, principal: "admin" },
-    ]) {
-      expect(validateSchema(schema.inputSchema, sample).ok).toBe(standardValidation(sample));
-    }
-    const manifest = projectCapabilityManifest(runtime);
-    expect(manifest).toMatchObject({
-      tools: [
-        {
-          title: "Documented search",
-          deprecated: true,
-          description: "Search only the host-selected synthetic context.",
+    if (!compiled) throw new Error("Missing compiled tool");
+    schema = compiled;
+  });
+  it.each(scenarioSeeds)(
+    "carries source contracts through runtime, MCP, and OpenAPI 3.1 (seed %i)",
+    async (seed) => {
+      const { input, context } = searchScenario(seed);
+      expect(schema.inputSchema).toMatchObject({
+        title: "Documented query",
+        description: expect.stringContaining("scope is selected by the host"),
+        properties: {
+          id: { format: "uuid" },
+          query: { minLength: 2, maxLength: 8, pattern: "^[a-z]+$", examples: ["hello"] },
+          count: { type: "integer", minimum: 1, maximum: 5, default: 2 },
+          label: { maxLength: 3, default: null },
+          tags: { minItems: 1, maxItems: 2 },
         },
-      ],
-    });
-    const openapi = projectTypedOpenApi(runtime, { title: "Documented tools", version: "1" });
-    await assertOpenApi31(openapi);
-    expect(openapi).toMatchObject({
-      paths: {
-        "/tools/tool-documentedSearch": {
-          post: {
-            summary: "Documented search",
+      });
+      expect(schema.outputSchema.description).toContain("host-selected prefix");
+      const handler = vi.fn(documentedSearch);
+      const definition = bindTool(handler, schema, {
+        entry: "documented-tools.ts",
+        exportName: "documentedSearch",
+        sourceDigest: "a".repeat(64),
+      })({ effect: "read" });
+      const runtime = createToolRuntime({ definitions: [definition], authorize: () => "ALLOW" });
+      expect(await runtime.invoke("documentedSearch", input, context)).toMatchObject({
+        status: "success",
+        output: { value: `${context.prefix}:${input.query}`, count: 2, label: null },
+      });
+      expect(handler.mock.calls[0]?.[0]).not.toHaveProperty("count");
+      const ajv = new Ajv2020({ strict: false });
+      formats.default(ajv);
+      const standardValidation = ajv.compile(schema.inputSchema);
+      for (const sample of [
+        input,
+        { ...input, count: 5, label: null },
+        { ...input, count: 1.5 },
+        { ...input, count: 0 },
+        { ...input, count: 6 },
+        { ...input, label: "long" },
+        { ...input, tags: [] },
+        { ...input, tags: ["a", "a", "a"] },
+        { ...input, id: "forged" },
+        { ...input, query: "HELLO" },
+        { ...input, principal: "admin" },
+      ]) {
+        expect(validateSchema(schema.inputSchema, sample).ok).toBe(standardValidation(sample));
+      }
+      const manifest = projectCapabilityManifest(runtime);
+      expect(manifest).toMatchObject({
+        tools: [
+          {
+            title: "Documented search",
             deprecated: true,
-            "x-network-endpoint": false,
-            responses: {
-              "200": { description: "The validated host-scoped match and effective count." },
-              "422": {
-                content: {
-                  "application/json": {
-                    schema: { $ref: "#/components/schemas/ToolInputValidationFailure" },
+            description: "Search only the host-selected synthetic context.",
+          },
+        ],
+      });
+      const openapi = projectTypedOpenApi(runtime, { title: "Documented tools", version: "1" });
+      await assertOpenApi31(openapi);
+      expect(openapi).toMatchObject({
+        paths: {
+          "/tools/tool-documentedSearch": {
+            post: {
+              summary: "Documented search",
+              deprecated: true,
+              "x-network-endpoint": false,
+              responses: {
+                "200": { description: "The validated host-scoped match and effective count." },
+                "422": {
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ToolInputValidationFailure" },
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-    });
-    const server = createTypedMcpServer({ runtime, context: { prefix: "trusted" } });
-    const client = new Client({ name: "documentation-test", version: "1" });
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    await server.connect(serverTransport);
-    await client.connect(clientTransport);
-    try {
-      const listing = (await client.listTools()).tools[0];
-      expect(listing).toMatchObject({
-        title: "Documented search",
-        description: schema.documentation?.description,
-        inputSchema: schema.inputSchema,
-        outputSchema: schema.outputSchema,
       });
-      expect(
-        (await client.callTool({ name: "documentedSearch", arguments: input })).isError,
-      ).not.toBe(true);
-      const calls = handler.mock.calls.length;
-      expect(
-        (await client.callTool({ name: "documentedSearch", arguments: { ...input, count: 9 } }))
-          .isError,
-      ).toBe(true);
-      expect(handler).toHaveBeenCalledTimes(calls);
-    } finally {
-      await client.close();
-      await server.close();
-    }
-  }, 20_000);
+      const server = createTypedMcpServer({ runtime, context });
+      const client = new Client({ name: "documentation-test", version: "1" });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await server.connect(serverTransport);
+      await client.connect(clientTransport);
+      try {
+        const listing = (await client.listTools()).tools[0];
+        expect(listing).toMatchObject({
+          title: "Documented search",
+          description: schema.documentation?.description,
+          inputSchema: schema.inputSchema,
+          outputSchema: schema.outputSchema,
+        });
+        expect(
+          (await client.callTool({ name: "documentedSearch", arguments: { ...input } })).isError,
+        ).not.toBe(true);
+        const calls = handler.mock.calls.length;
+        expect(
+          (await client.callTool({ name: "documentedSearch", arguments: { ...input, count: 9 } }))
+            .isError,
+        ).toBe(true);
+        expect(handler).toHaveBeenCalledTimes(calls);
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
 
   it.each([
     ["@format email", "string", /Unsupported @format/],
