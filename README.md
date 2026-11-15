@@ -1,11 +1,11 @@
 
-<h3 style="text-align: center;">   √Travesty ??<br><br>
-Traversable && totally</h4>
+<h4 style="text-align: center;">√Travesty ?=
+...traversable && totally TRUCKIN'</h4>
 
 <p align="center">
   <img src="assets/brand/logo/tubular-logo-960.png" alt="Tubular" width="480">
 </p>
-<h4 style="text-align: center;">  to just keep TRUCKIN' on, <br> big dawg ✌︎㋡</h4>
+<h4 style="text-align: right;">  dude ✌︎㋡</h4>
 
 
 The internet is a series of tubes. Tubular is for the things we send through them: capabilities, contracts, and the context that helps an agent know what's what. Declare your TypeScript once; let the tooling connect the pieces.
