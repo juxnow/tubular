@@ -4,17 +4,17 @@ import { sha256, stableStringify } from "../src/core/json.js";
 import {
   type AuthorityRequirement,
   type CapabilityDefinition,
-  definePortAuthority,
-  PORT_AUTHORITY_PROTOCOL,
-  type PortAuthorityDefinition,
-  type PortAuthoritySource,
-  portAuthorityBody,
-  verifyPortAuthorityIntegrity,
-} from "../src/port-authority/definition.js";
-import { portAuthorityFromRegistry } from "../src/profiles/totally-tubular.js";
+  definePerspective,
+  PERSPECTIVE_PROTOCOL,
+  type PerspectiveDefinition,
+  type PerspectiveSource,
+  perspectiveBody,
+  verifyPerspectiveIntegrity,
+} from "../src/perspective/definition.js";
+import { perspectiveFromRegistry } from "../src/profiles/totally-tubular.js";
 
 /** Recover authoring fields from a sealed fixture for targeted conformance mutations. */
-function sourceFromDefinition(definition: PortAuthorityDefinition): PortAuthoritySource {
+function sourceFromDefinition(definition: PerspectiveDefinition): PerspectiveSource {
   return {
     name: definition.name,
     version: definition.version,
@@ -34,9 +34,9 @@ function sourceFromDefinition(definition: PortAuthorityDefinition): PortAuthorit
 
 /** Replace one fixture capability while preserving the surrounding portable definition. */
 function updateCapability(
-  source: PortAuthoritySource,
+  source: PerspectiveSource,
   update: (capability: CapabilityDefinition) => CapabilityDefinition,
-): PortAuthoritySource {
+): PerspectiveSource {
   return {
     ...source,
     capabilities: source.capabilities.map((capability) =>
@@ -87,17 +87,17 @@ function reverseCapability(capability: CapabilityDefinition): CapabilityDefiniti
 }
 
 /** Verify a sealed definition and return its compact identifier, version, and digest reference. */
-function referencePortAuthority(): PortAuthorityDefinition {
-  return portAuthorityFromRegistry(createDefaultRegistry());
+function referencePerspective(): PerspectiveDefinition {
+  return perspectiveFromRegistry(createDefaultRegistry());
 }
 
-describe("Port Authority Protocol v0 conformance", () => {
+describe("Perspective Protocol v0 conformance", () => {
   it("describes the current AAPI capability without transport concerns", () => {
-    const portAuthority = referencePortAuthority();
-    expect(portAuthority.specification).toBe(PORT_AUTHORITY_PROTOCOL);
-    expect(portAuthority.specification).toBe("port-authority/v0");
+    const perspective = referencePerspective();
+    expect(perspective.specification).toBe(PERSPECTIVE_PROTOCOL);
+    expect(perspective.specification).toBe("perspective/v0");
 
-    const capability = portAuthority.capabilities.find(
+    const capability = perspective.capabilities.find(
       (candidate) => candidate.id === "workspace.note.append",
     );
     if (capability === undefined) {
@@ -161,7 +161,7 @@ describe("Port Authority Protocol v0 conformance", () => {
       },
     ]);
     expect(
-      portAuthority.contextKinds.find((context) => context.id === "exact-manifest"),
+      perspective.contextKinds.find((context) => context.id === "exact-manifest"),
     ).toMatchObject({
       selection: "explicit",
       provenance: "required",
@@ -170,15 +170,15 @@ describe("Port Authority Protocol v0 conformance", () => {
       recordsOmissions: true,
     });
     expect(
-      portAuthority.authoritySchemes.every((scheme) => scheme.promptGrantsAuthority === false),
+      perspective.authoritySchemes.every((scheme) => scheme.promptGrantsAuthority === false),
     ).toBe(true);
     expect(
-      portAuthority.lifecycles
+      perspective.lifecycles
         .find((lifecycle) => lifecycle.id === "proposal-execution")
         ?.states.find((state) => state.id === "outcome-unknown"),
     ).toEqual({ id: "outcome-unknown", terminal: true });
 
-    const serialized = stableStringify(portAuthority);
+    const serialized = stableStringify(perspective);
     for (const projectionKey of [
       "documentationOnly",
       "httpMethod",
@@ -197,9 +197,9 @@ describe("Port Authority Protocol v0 conformance", () => {
   });
 
   it("normalizes unordered declarations before calculating identity", () => {
-    const canonical = referencePortAuthority();
+    const canonical = referencePerspective();
     const source = sourceFromDefinition(canonical);
-    const reordered = definePortAuthority({
+    const reordered = definePerspective({
       ...source,
       scopeKinds: [...(source.scopeKinds ?? [])].reverse(),
       resourceKinds: [...(source.resourceKinds ?? [])].reverse(),
@@ -224,21 +224,21 @@ describe("Port Authority Protocol v0 conformance", () => {
     expect(stableStringify(reordered)).toBe(stableStringify(canonical));
     expect(reordered.id).toBe(canonical.id);
     expect(reordered.digest).toBe(canonical.digest);
-    expect(canonical.digest).toBe(sha256(stableStringify(portAuthorityBody(canonical))));
-    expect(canonical.id).toBe(`port_authority_${canonical.digest.slice(0, 24)}`);
+    expect(canonical.digest).toBe(sha256(stableStringify(perspectiveBody(canonical))));
+    expect(canonical.id).toBe(`perspective_${canonical.digest.slice(0, 24)}`);
   });
 
   it("changes identity when any core semantic declaration changes", () => {
-    const canonical = referencePortAuthority();
+    const canonical = referencePerspective();
     const source = sourceFromDefinition(canonical);
     const mutations: readonly {
       /** Human-readable regression case label, independent of contract identifiers. */
       readonly name: string;
       /** Fixture transformation introducing exactly the inconsistency checked by the case. */
-      readonly mutate: (input: PortAuthoritySource) => PortAuthoritySource;
+      readonly mutate: (input: PerspectiveSource) => PerspectiveSource;
     }[] = [
       {
-        name: "Port Authority version",
+        name: "Perspective version",
         mutate: (input) => ({ ...input, version: "0.2.0" }),
       },
       {
@@ -293,26 +293,26 @@ describe("Port Authority Protocol v0 conformance", () => {
     ];
 
     for (const mutation of mutations) {
-      const changed = definePortAuthority(mutation.mutate(source));
+      const changed = definePerspective(mutation.mutate(source));
       expect(changed.digest, mutation.name).not.toBe(canonical.digest);
       expect(changed.id, mutation.name).not.toBe(canonical.id);
     }
   });
 
   it("detects post-definition tampering", () => {
-    const portAuthority = referencePortAuthority();
-    expect(verifyPortAuthorityIntegrity(portAuthority)).toBe(true);
-    expect(verifyPortAuthorityIntegrity({ ...portAuthority, title: "Tampered title" })).toBe(false);
+    const perspective = referencePerspective();
+    expect(verifyPerspectiveIntegrity(perspective)).toBe(true);
+    expect(verifyPerspectiveIntegrity({ ...perspective, title: "Tampered title" })).toBe(false);
     expect(
-      verifyPortAuthorityIntegrity({
-        ...portAuthority,
+      verifyPerspectiveIntegrity({
+        ...perspective,
         digest: "0".repeat(64),
       }),
     ).toBe(false);
     expect(
-      verifyPortAuthorityIntegrity({
-        ...portAuthority,
-        capabilities: portAuthority.capabilities.map((capability) => ({
+      verifyPerspectiveIntegrity({
+        ...perspective,
+        capabilities: perspective.capabilities.map((capability) => ({
           ...capability,
           execution: {
             ...capability.execution,
@@ -324,9 +324,9 @@ describe("Port Authority Protocol v0 conformance", () => {
   });
 
   it("rejects open object schemas at canonical boundaries and when nested", () => {
-    const portAuthority = referencePortAuthority();
-    const source = sourceFromDefinition(portAuthority);
-    const openSchemas: readonly PortAuthoritySource[] = [
+    const perspective = referencePerspective();
+    const source = sourceFromDefinition(perspective);
+    const openSchemas: readonly PerspectiveSource[] = [
       updateCapability(source, (capability) => ({
         ...capability,
         inputSchema: { type: "object" },
@@ -351,14 +351,14 @@ describe("Port Authority Protocol v0 conformance", () => {
     ];
 
     for (const open of openSchemas) {
-      expect(() => definePortAuthority(open)).toThrow("open_object_schema");
+      expect(() => definePerspective(open)).toThrow("open_object_schema");
     }
   });
 
   it("rejects non-finite JSON data before hashing", () => {
-    const source = sourceFromDefinition(referencePortAuthority());
+    const source = sourceFromDefinition(referencePerspective());
     expect(() =>
-      definePortAuthority(
+      definePerspective(
         updateCapability(source, (capability) => ({
           ...capability,
           inputSchema: {
@@ -371,9 +371,9 @@ describe("Port Authority Protocol v0 conformance", () => {
   });
 
   it("allows domain fields that merely share names with projection concepts", () => {
-    const source = sourceFromDefinition(referencePortAuthority());
+    const source = sourceFromDefinition(referencePerspective());
     expect(() =>
-      definePortAuthority(
+      definePerspective(
         updateCapability(source, (capability) => ({
           ...capability,
           inputSchema: {
@@ -391,12 +391,12 @@ describe("Port Authority Protocol v0 conformance", () => {
   });
 
   it("rejects unknown semantic references", () => {
-    const source = sourceFromDefinition(referencePortAuthority());
+    const source = sourceFromDefinition(referencePerspective());
     const unknownReferences: readonly {
       /** Human-readable regression case label, independent of contract identifiers. */
       readonly name: string;
       /** Portable authoring fixture supplied to the conformance assertion. */
-      readonly source: PortAuthoritySource;
+      readonly source: PerspectiveSource;
       /** Expected diagnostic text for the deliberately malformed fixture. */
       readonly message: string;
     }[] = [
@@ -478,12 +478,12 @@ describe("Port Authority Protocol v0 conformance", () => {
     ];
 
     for (const unknown of unknownReferences) {
-      expect(() => definePortAuthority(unknown.source), unknown.name).toThrow(unknown.message);
+      expect(() => definePerspective(unknown.source), unknown.name).toThrow(unknown.message);
     }
   });
 
   it("rejects duplicate identities and declarations", () => {
-    const source = sourceFromDefinition(referencePortAuthority());
+    const source = sourceFromDefinition(referencePerspective());
     const capability = source.capabilities[0];
     const lifecycle = (source.lifecycles ?? [])[0];
     if (capability === undefined || lifecycle === undefined) {
@@ -496,13 +496,13 @@ describe("Port Authority Protocol v0 conformance", () => {
     }
 
     expect(() =>
-      definePortAuthority({
+      definePerspective({
         ...source,
         capabilities: [capability, capability],
       }),
     ).toThrow("Duplicate capability");
     expect(() =>
-      definePortAuthority({
+      definePerspective({
         ...source,
         capabilities: [
           {
@@ -513,7 +513,7 @@ describe("Port Authority Protocol v0 conformance", () => {
       }),
     ).toThrow("Duplicate error code");
     expect(() =>
-      definePortAuthority({
+      definePerspective({
         ...source,
         lifecycles: [
           {

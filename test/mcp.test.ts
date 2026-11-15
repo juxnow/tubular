@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { afterEach, describe, expect, it } from "vitest";
-import { createDefaultPortAuthority } from "../src/catalog.js";
+import { createDefaultPerspective } from "../src/catalog.js";
 import { projectMcpTools } from "../src/contracts/projections.js";
 import { isJsonObject } from "../src/core/json.js";
 
@@ -33,7 +33,7 @@ describe("proposal-only MCP server", () => {
     await client.connect(transport);
 
     const listed = await client.listTools();
-    const projectedTools = projectMcpTools(createDefaultPortAuthority())["tools"];
+    const projectedTools = projectMcpTools(createDefaultPerspective())["tools"];
     if (!Array.isArray(projectedTools)) {
       throw new Error("Expected projected MCP tools");
     }

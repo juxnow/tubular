@@ -3,10 +3,10 @@ import { deepFreezeJsonObject, type JsonObject, type JsonValue } from "../core/j
 import {
   type AuthorityRequirement,
   type CapabilityDefinition,
-  type PortAuthorityDefinition,
-  referencePortAuthority,
-  verifyPortAuthorityIntegrity,
-} from "../port-authority/definition.js";
+  type PerspectiveDefinition,
+  referencePerspective,
+  verifyPerspectiveIntegrity,
+} from "../perspective/definition.js";
 
 /** Project a portable capability into discovery metadata without creating an execution surface. */
 function capabilityProjection(capability: CapabilityDefinition): JsonObject {
@@ -49,9 +49,9 @@ function approvalSummary(capability: CapabilityDefinition): string {
 }
 
 /** Reject nonconforming or tampered portable definitions before generating downstream projections. */
-function assertProjectable(portAuthority: PortAuthorityDefinition): void {
-  if (!verifyPortAuthorityIntegrity(portAuthority)) {
-    throw new TypeError("Cannot project a non-conforming or tampered Port Authority");
+function assertProjectable(perspective: PerspectiveDefinition): void {
+  if (!verifyPerspectiveIntegrity(perspective)) {
+    throw new TypeError("Cannot project a non-conforming or tampered Perspective");
   }
 }
 
@@ -99,11 +99,11 @@ export interface McpToolBinding {
 
 /** Derive proposal-only native MCP definitions and a safe status tool from the portable contract. */
 export function createMcpToolBindings(
-  portAuthority: PortAuthorityDefinition,
+  perspective: PerspectiveDefinition,
 ): readonly McpToolBinding[] {
-  assertProjectable(portAuthority);
+  assertProjectable(perspective);
   const names = new Set<string>();
-  const bindings: McpToolBinding[] = portAuthority.capabilities.map((capability) => {
+  const bindings: McpToolBinding[] = perspective.capabilities.map((capability) => {
     const name = `tt.propose.${capability.id}`;
     ensureUnique(names, name, "MCP name");
     const descriptor = deepFreezeJsonObject({
@@ -117,8 +117,8 @@ export function createMcpToolBindings(
         idempotentHint: false,
         openWorldHint: false,
       },
-      "x-port-authority-capability": capabilityProjection(capability),
-      "x-port-authority-source": referencePortAuthority(portAuthority),
+      "x-perspective-capability": capabilityProjection(capability),
+      "x-perspective-source": referencePerspective(perspective),
       "x-totally-tubular-canonical-tool": capability.id,
       "x-totally-tubular-version": capability.version,
       "x-totally-tubular-effect": effectSummary(capability),
@@ -164,22 +164,22 @@ export function createMcpToolBindings(
 }
 
 /** Create deterministic discovery metadata from a verified portable definition. */
-export function projectContractCatalog(portAuthority: PortAuthorityDefinition): JsonObject {
-  assertProjectable(portAuthority);
+export function projectContractCatalog(perspective: PerspectiveDefinition): JsonObject {
+  assertProjectable(perspective);
   return {
-    protocol: "second-service.contract-catalog/v0",
-    sourcePortAuthority: referencePortAuthority(portAuthority),
-    capabilities: portAuthority.capabilities.map((capability) => capabilityProjection(capability)),
+    protocol: "looking-glass.contract-catalog/v0",
+    sourcePerspective: referencePerspective(perspective),
+    capabilities: perspective.capabilities.map((capability) => capabilityProjection(capability)),
   };
 }
 
 /** Wrap the legacy proposal-only MCP definitions for deterministic documentation output. */
-export function projectMcpTools(portAuthority: PortAuthorityDefinition): JsonObject {
-  const bindings = createMcpToolBindings(portAuthority);
+export function projectMcpTools(perspective: PerspectiveDefinition): JsonObject {
+  const bindings = createMcpToolBindings(perspective);
 
   return {
-    protocol: "second-service.mcp-tools/v0",
-    sourcePortAuthority: referencePortAuthority(portAuthority),
+    protocol: "looking-glass.mcp-tools/v0",
+    sourcePerspective: referencePerspective(perspective),
     documentationOnly: true,
     proposalOnly: true,
     tools: bindings.map((binding) => binding.descriptor),
@@ -187,13 +187,13 @@ export function projectMcpTools(portAuthority: PortAuthorityDefinition): JsonObj
 }
 
 /** Produce OpenAPI 3.1 documentation for hypothetical HTTP paths; no HTTP adapter or authorization middleware is installed. */
-export function projectOpenApi(portAuthority: PortAuthorityDefinition): JsonObject {
-  assertProjectable(portAuthority);
+export function projectOpenApi(perspective: PerspectiveDefinition): JsonObject {
+  assertProjectable(perspective);
   const paths: Record<string, JsonValue> = {};
   const pathNames = new Set<string>();
   const operationIds = new Set<string>();
 
-  for (const capability of portAuthority.capabilities) {
+  for (const capability of perspective.capabilities) {
     const path = `/tools/${capability.id.replaceAll(".", "/")}`;
     const operationId = capability.id.replaceAll(".", "_").replaceAll("-", "_");
     ensureUnique(pathNames, path, "OpenAPI path");
@@ -217,8 +217,8 @@ export function projectOpenApi(portAuthority: PortAuthorityDefinition): JsonObje
             },
           },
         },
-        "x-port-authority-capability": capabilityProjection(capability),
-        "x-port-authority-source": referencePortAuthority(portAuthority),
+        "x-perspective-capability": capabilityProjection(capability),
+        "x-perspective-source": referencePerspective(perspective),
         "x-totally-tubular-tool": true,
         "x-totally-tubular-tool-name": capability.id,
         "x-totally-tubular-effect": effectSummary(capability),
@@ -232,14 +232,14 @@ export function projectOpenApi(portAuthority: PortAuthorityDefinition): JsonObje
   return {
     openapi: "3.1.0",
     info: {
-      title: `${portAuthority.title} capability documentation`,
-      version: portAuthority.version,
+      title: `${perspective.title} capability documentation`,
+      version: perspective.version,
       description:
-        "Documentation-only projection of a Port Authority. These paths are not HTTP endpoints.",
+        "Documentation-only projection of a Perspective. These paths are not HTTP endpoints.",
     },
     servers: [],
     paths,
-    "x-port-authority-source": referencePortAuthority(portAuthority),
+    "x-perspective-source": referencePerspective(perspective),
     "x-documentation-projection": true,
     "x-network-endpoint": false,
   };

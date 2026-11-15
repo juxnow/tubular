@@ -36,14 +36,14 @@ const DOMAIN_PREFIXES = [
   "src/contracts/",
   "src/core/",
   "src/governed-tools/",
-  "src/port-authority/",
+  "src/perspective/",
   "src/runtime/",
   "src/type-validation/",
   "src/typed-tools/",
 ] as const;
 
 const PROJECTION_FILES = new Set(["src/contracts/projections.ts"]);
-const PROJECTION_PREFIXES = ["src/second-service/", "src/typed-projections/"] as const;
+const PROJECTION_PREFIXES = ["src/looking-glass/", "src/typed-projections/"] as const;
 const ADAPTER_PREFIXES = ["src/adapters/", "src/mcp/", "src/typed-mcp/"] as const;
 const ENTRYPOINT_PREFIXES = ["src/cli.ts", "src/demo.ts", "src/typegen/"] as const;
 

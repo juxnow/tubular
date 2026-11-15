@@ -1,20 +1,20 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createDefaultPortAuthority } from "../src/catalog.js";
+import { createDefaultPerspective } from "../src/catalog.js";
 import { stablePrettyStringify } from "../src/core/json.js";
-import { compileSecondService } from "../src/second-service/compiler.js";
+import { compileLookingGlass } from "../src/looking-glass/compiler.js";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = resolve(scriptDirectory, "../docs/generated");
-const portAuthority = createDefaultPortAuthority();
-const compilation = compileSecondService(portAuthority);
+const perspective = createDefaultPerspective();
+const compilation = compileLookingGlass(perspective);
 
 const check = process.argv.includes("--check");
 if (!check) await mkdir(outputDirectory, { recursive: true });
 
 const artifacts = [
-  ["port-authority-manifest.json", portAuthority],
+  ["perspective-manifest.json", perspective],
   ["contracts.json", compilation.contractCatalog],
   ["mcp-tools.json", compilation.mcpTools],
   ["openapi.json", compilation.openApi],

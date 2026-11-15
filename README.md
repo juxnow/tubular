@@ -4,7 +4,25 @@
 <h6 style="text-align: center;">√Travesty ?= <br>
 ...traversable && totally TRUCKIN' Tubular, dude ✌︎㋡</h6>
 
+# Technology should meet you where you are.
 
+Too many tools ask people to adapt to them: learn another interface, repeat the same story, remember where everything lives, and somehow make it all work together. What if your tools could meet you with the context you choose, so you could spend less energy translating yourself and more on what you actually want to do?
+
+That is the direction I'm building toward. Your experiences, your preferences, your work, and your perspective matter. Some context belongs to you alone; some can be shared when you choose. Technology should help you navigate those boundaries, not erase them.
+
+**Tubular is the TypeScript library I'm building underneath that vision.** Today it is a toolkit for developers building capabilities for software and AI assistants. It can generate machine-readable contracts, validate tool calls, and connect tools to MCP. It is an early implementation, not yet the personal assistant or context experience described above.
+
+## The world we're building ∴
+
+- **Tubular** is the developer library: the tubes and tools for building capabilities from TypeScript declarations.
+- **Perspective** is the direction for expressing what a system can do, what context it needs, what authority it requires, and what an action can affect. Each person's perspective is more than a schema; the existing portable contract represents only part of this idea.
+- **Through the Looking Glass** is the portal. The current prototype can project contracts into different forms; that is one piece of the direction, not a completed portal.
+- **con text, sincopar:** **sincopar** is the context plane, the direction for selecting, organizing, and carrying context across perspectives.
+- **Serenity** is the envisioned model-agnostic service for delivering a personal context experience. It remains future work.
+
+**AAPI** means Agentic Application Programming Interface. **MCCP** means Model Context & Convergence Protocol. Both are technologies in this work; MCCP is not yet a finalized specification.
+
+If you're here because a friend shared this, you don't need to know TypeScript to understand the reason behind it. If you do want to build with Tubular, the examples below are for you.
 
 The internet is a series of tubes. Tubular is for the things we send through them: capabilities, contracts, and the context that helps an agent know what's what. Declare your TypeScript once; let the tooling connect the pieces.
 
@@ -15,8 +33,6 @@ It's flower power with a compiler. It's a little bit of skate-park radical, a li
 And because the details matter: **13 ∈ ℙ**, where ℙ is the set of prime numbers. A favorite number and a little signature in the margins.
 
 **TypeScript-first building blocks for agentic application programming interfaces.** Declare a tool's input, output and implementation in TypeScript. Tubular derives machine-readable schemas, validates calls against those schemas, and exposes the same capabilities to MCP clients. The schemas are contracts that software can consume, not just documentation.
-
-Tubular is a library for building with **AAPI (Agentic Application Programming Interface)** and related technologies such as **MCCP (Model Context & Convergence Protocol)**. This package does not claim to implement a finalized MCCP specification. Serenity, the envisioned model-agnostic personal context-plane service, is a separate product that can build on these foundations.
 
 ∴ From [villagealchemist](https://github.com/villagealchemist), in the JUX universe.
 
@@ -34,21 +50,19 @@ npm run example:governed
 
 The hello example retains the original read-only API. The governed example generates a binding from `examples/governed/tools.ts`, denies an out-of-scope request, requires exact approval, executes an in-memory write, replays its receipt without repeating the write, and verifies the audit chain. Its human review is explicitly simulated. No model provider or network service is required.
 
-## Choose your route ∴ the script map
+## Working on Tubular ∴
 
-The familiar npm commands stay right where you'd expect them. These aliases take the scenic route to the same work:
+| Command | What it does |
+| --- | --- |
+| `npm run build` | Build the library. |
+| `npm test` | Run the tests. |
+| `npm run docs:check` | Check source documentation and generated contracts. |
+| `npm run docs` | Regenerate the contract artifacts. |
+| `npm run check` | Run the full project check. |
+| `npm run example` | Build and run the read-only example. |
+| `npm run example:governed` | Build and run the governed example. |
 
-| Scenic route              | Standard command           | What it does                                        |
-| ------------------------- | -------------------------- | --------------------------------------------------- |
-| `npm run assemble`        | `npm run build`            | Build the library.                                  |
-| `npm run radical`         | `npm test`                 | Run the tests.                                      |
-| `npm run survey`          | `npm run docs:check`       | Check source documentation and generated contracts. |
-| `npm run blueprint`       | `npm run docs`             | Regenerate the contract artifacts.                  |
-| `npm run keep-it-tubular` | `npm run check`            | Run the full project check.                         |
-| `npm run flow`            | `npm run example`          | Build and run the read-only example.                |
-| `npm run deep-dive`       | `npm run example:governed` | Build and run the governed example.                 |
-
-`blueprint` regenerates checked-in documentation. `flow` and `deep-dive` build and regenerate example files. `survey` checks documentation without rewriting it.
+`docs` regenerates checked-in documentation. The examples build and regenerate example files; `docs:check` checks documentation without rewriting it.
 
 ## Declare a capability
 

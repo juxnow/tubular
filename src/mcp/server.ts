@@ -2,7 +2,7 @@ import { fromJsonSchema, McpServer } from "@modelcontextprotocol/server";
 import { createMcpToolBindings } from "../contracts/projections.js";
 import type { JsonObject } from "../core/json.js";
 import { stableStringify } from "../core/json.js";
-import type { PortAuthorityDefinition } from "../port-authority/definition.js";
+import type { PerspectiveDefinition } from "../perspective/definition.js";
 import type { GatewayResult, ProposalOnlyGateway } from "./gateway.js";
 
 /** Serialize a sanitized gateway result as MCP text and structured content, marking rejections as errors. */
@@ -16,7 +16,7 @@ function toolResult(result: GatewayResult) {
 
 /** Register native proposal and status MCP tools; the gateway supplies fixed identity and never exposes approval or dispatch. */
 export function buildMcpServer(
-  portAuthority: PortAuthorityDefinition,
+  perspective: PerspectiveDefinition,
   gateway: ProposalOnlyGateway,
 ): McpServer {
   const server = new McpServer(
@@ -27,7 +27,7 @@ export function buildMcpServer(
     },
   );
 
-  for (const binding of createMcpToolBindings(portAuthority)) {
+  for (const binding of createMcpToolBindings(perspective)) {
     const descriptor = binding.descriptor;
     const options = {
       title: descriptor.title,

@@ -6,29 +6,26 @@ import {
   type AapiV0Result,
   type AapiV0Scope,
   type AapiV0SourceReference,
-  aapiV0ContextItemToPortAuthority,
-  aapiV0InvocationToPortAuthority,
-  aapiV0PrincipalToPortAuthority,
-  aapiV0ResultToPortAuthority,
-  aapiV0ScopeToPortAuthority,
-  aapiV0SourceToPortAuthority,
-  portAuthorityContextItemToAapiV0,
-  portAuthorityInvocationToAapiV0,
-  portAuthorityOutcomeToAapiV0,
-  portAuthorityPrincipalToAapiV0,
-  portAuthorityScopeToAapiV0,
-  portAuthoritySourceToAapiV0,
-} from "../src/port-authority/aapi-v0.js";
-import {
-  PORT_AUTHORITY_PROTOCOL,
-  type PortAuthorityReference,
-} from "../src/port-authority/definition.js";
+  aapiV0ContextItemToPerspective,
+  aapiV0InvocationToPerspective,
+  aapiV0PrincipalToPerspective,
+  aapiV0ResultToPerspective,
+  aapiV0ScopeToPerspective,
+  aapiV0SourceToPerspective,
+  perspectiveContextItemToAapiV0,
+  perspectiveInvocationToAapiV0,
+  perspectiveOutcomeToAapiV0,
+  perspectivePrincipalToAapiV0,
+  perspectiveScopeToAapiV0,
+  perspectiveSourceToAapiV0,
+} from "../src/perspective/aapi-v0.js";
+import { PERSPECTIVE_PROTOCOL, type PerspectiveReference } from "../src/perspective/definition.js";
 
-const portAuthority: PortAuthorityReference = {
-  id: `port_authority_${"a".repeat(24)}`,
+const perspective: PerspectiveReference = {
+  id: `perspective_${"a".repeat(24)}`,
   digest: "a".repeat(64),
   version: "0.1.0",
-  specification: PORT_AUTHORITY_PROTOCOL,
+  specification: PERSPECTIVE_PROTOCOL,
 };
 
 const principal: AapiV0Principal = {
@@ -52,18 +49,18 @@ const source: AapiV0SourceReference = {
 };
 
 describe("AAPI v0 clean-room compatibility", () => {
-  it("rejects a Port Authority reference whose id does not bind its digest", () => {
+  it("rejects a Perspective reference whose id does not bind its digest", () => {
     expect(() =>
-      aapiV0InvocationToPortAuthority(
+      aapiV0InvocationToPerspective(
         {
-          correlationId: "correlation-invalid-port-authority",
+          correlationId: "correlation-invalid-perspective",
           principal,
           scope,
           capability: "activity.summarize",
           input: {},
           source,
         },
-        { ...portAuthority, id: "port_authority_0123456789abcdef01234567" },
+        { ...perspective, id: "perspective_0123456789abcdef01234567" },
         "1.0.0",
       ),
     ).toThrow("must match its digest");
@@ -83,12 +80,12 @@ describe("AAPI v0 clean-room compatibility", () => {
       },
     };
 
-    expect(portAuthorityPrincipalToAapiV0(aapiV0PrincipalToPortAuthority(principal))).toEqual(
+    expect(perspectivePrincipalToAapiV0(aapiV0PrincipalToPerspective(principal))).toEqual(
       principal,
     );
-    expect(portAuthorityScopeToAapiV0(aapiV0ScopeToPortAuthority(scope))).toEqual(scope);
-    expect(portAuthoritySourceToAapiV0(aapiV0SourceToPortAuthority(source))).toEqual(source);
-    expect(portAuthorityContextItemToAapiV0(aapiV0ContextItemToPortAuthority(contextItem))).toEqual(
+    expect(perspectiveScopeToAapiV0(aapiV0ScopeToPerspective(scope))).toEqual(scope);
+    expect(perspectiveSourceToAapiV0(aapiV0SourceToPerspective(source))).toEqual(source);
+    expect(perspectiveContextItemToAapiV0(aapiV0ContextItemToPerspective(contextItem))).toEqual(
       contextItem,
     );
   });
@@ -100,7 +97,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       resourceId: "direct-message-channel",
     };
 
-    const roundTrip = portAuthoritySourceToAapiV0(aapiV0SourceToPortAuthority(parentless));
+    const roundTrip = perspectiveSourceToAapiV0(aapiV0SourceToPerspective(parentless));
     expect(roundTrip).toEqual(parentless);
     expect("parentResourceId" in roundTrip).toBe(false);
   });
@@ -138,14 +135,14 @@ describe("AAPI v0 clean-room compatibility", () => {
       source,
     };
 
-    const encoded = aapiV0InvocationToPortAuthority(invocation, portAuthority, "1.0.0");
-    expect(encoded.protocol).toBe("port-authority.invocation/v0");
-    expect(encoded.portAuthority).toEqual(portAuthority);
+    const encoded = aapiV0InvocationToPerspective(invocation, perspective, "1.0.0");
+    expect(encoded.protocol).toBe("perspective.invocation/v0");
+    expect(encoded.perspective).toEqual(perspective);
     expect(encoded.capability).toEqual({
       id: "activity.summarize",
       version: "1.0.0",
     });
-    expect(portAuthorityInvocationToAapiV0(encoded)).toEqual(invocation);
+    expect(perspectiveInvocationToAapiV0(encoded)).toEqual(invocation);
   });
 
   it("represents providerRequestId only as an opaque trace", () => {
@@ -161,9 +158,9 @@ describe("AAPI v0 clean-room compatibility", () => {
       providerRequestId: "req_test",
     };
 
-    const encoded = aapiV0ResultToPortAuthority(result, portAuthority, "1.0.0");
-    expect(encoded.protocol).toBe("port-authority.outcome/v0");
-    expect(encoded.portAuthority).toEqual(portAuthority);
+    const encoded = aapiV0ResultToPerspective(result, perspective, "1.0.0");
+    expect(encoded.protocol).toBe("perspective.outcome/v0");
+    expect(encoded.perspective).toEqual(perspective);
     expect("providerRequestId" in encoded).toBe(false);
     expect(encoded.traces).toEqual([
       {
@@ -172,7 +169,7 @@ describe("AAPI v0 clean-room compatibility", () => {
         id: "req_test",
       },
     ]);
-    expect(portAuthorityOutcomeToAapiV0(encoded)).toEqual(result);
+    expect(perspectiveOutcomeToAapiV0(encoded)).toEqual(result);
   });
 
   it("round-trips a result that has no provider request trace", () => {
@@ -182,8 +179,8 @@ describe("AAPI v0 clean-room compatibility", () => {
       output: ["awake"],
     };
 
-    const roundTrip = portAuthorityOutcomeToAapiV0(
-      aapiV0ResultToPortAuthority(result, portAuthority, "1.0.0"),
+    const roundTrip = perspectiveOutcomeToAapiV0(
+      aapiV0ResultToPerspective(result, perspective, "1.0.0"),
     );
     expect(roundTrip).toEqual(result);
     expect("providerRequestId" in roundTrip).toBe(false);
@@ -199,7 +196,7 @@ describe("AAPI v0 clean-room compatibility", () => {
       source,
     };
 
-    expect(() => aapiV0InvocationToPortAuthority(invocation, portAuthority, "1.0.0")).toThrow(
+    expect(() => aapiV0InvocationToPerspective(invocation, perspective, "1.0.0")).toThrow(
       /Invocation input must be JSON-safe/u,
     );
   });
@@ -221,10 +218,10 @@ describe("AAPI v0 clean-room compatibility", () => {
       output: circular,
     };
 
-    expect(() => aapiV0ResultToPortAuthority(invalidResult, portAuthority, "1.0.0")).toThrow(
+    expect(() => aapiV0ResultToPerspective(invalidResult, perspective, "1.0.0")).toThrow(
       /finite numbers/u,
     );
-    expect(() => aapiV0ResultToPortAuthority(circularResult, portAuthority, "1.0.0")).toThrow(
+    expect(() => aapiV0ResultToPerspective(circularResult, perspective, "1.0.0")).toThrow(
       /circular reference/u,
     );
   });

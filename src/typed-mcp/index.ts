@@ -4,7 +4,7 @@ import { isJsonObject, stableStringify } from "../core/json.js";
 import type { ToolCatalog } from "../typed-projections/index.js";
 import type { ToolRuntime } from "../typed-tools/index.js";
 
-/** Native MCP discovery fields, projected without introducing transport authority. */
+/** Native MCP discovery fields, projected without introducing transperspective. */
 export interface TypedMcpToolDefinition extends JsonObject {
   /** Runtime registry name accepted by tools/call. */
   readonly name: string;
