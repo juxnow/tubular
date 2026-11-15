@@ -1,12 +1,28 @@
+
+<h3 style="text-align: center;">   √Travesty ??<br><br>
+Traversable && totally</h4>
+
 <p align="center">
   <img src="assets/brand/logo/tubular-logo-960.png" alt="Tubular" width="480">
 </p>
+<h4 style="text-align: center;">  to just keep TRUCKIN' on, <br> big dawg ✌︎㋡</h4>
 
-# Tubular.... toatally ✌︎㋡ ∛
+
+The internet is a series of tubes. Tubular is for the things we send through them: capabilities, contracts, and the context that helps an agent know what's what. Declare your TypeScript once; let the tooling connect the pieces.
+
+It's flower power with a compiler. It's a little bit of skate-park radical, a little bit of software architecture, and a whole lot of care about what travels through the context-delivery lane.
+
+**√(Tone²) = |Tone|.** For a nonnegative Tone, the radical takes you right back to Tone. The tone? Totally tubular.
+
+And because the details matter: **13 ∈ ℙ**, where ℙ is the set of prime numbers. A favorite number and a little signature in the margins.
 
 **TypeScript-first building blocks for agentic application programming interfaces.** Declare a tool's input, output and implementation in TypeScript. Tubular derives machine-readable schemas, validates calls against those schemas, and exposes the same capabilities to MCP clients. The schemas are contracts that software can consume, not just documentation.
 
 Tubular is a library for building with **AAPI (Agentic Application Programming Interface)** and related technologies such as **MCCP (Model Context & Convergence Protocol)**. This package does not claim to implement a finalized MCCP specification. Serenity, the envisioned model-agnostic personal context-plane service, is a separate product that can build on these foundations.
+
+∴ From [villagealchemist](https://github.com/villagealchemist), in the JUX universe.
+
+The name nods to the internet's [series-of-tubes remix](https://www.youtube.com/watch?v=EtOoQFa5ug8): Paul Holcomb made the mix, and Gavin of 13tongimp made the video. Different tubes; excellent energy.
 
 ## Try the example
 
@@ -20,47 +36,40 @@ npm run example:governed
 
 The hello example retains the original read-only API. The governed example generates a binding from `examples/governed/tools.ts`, denies an out-of-scope request, requires exact approval, executes an in-memory write, replays its receipt without repeating the write, and verifies the audit chain. Its human review is explicitly simulated. No model provider or network service is required.
 
+## Choose your route ∴ the script map
+
+The familiar npm commands stay right where you'd expect them. These aliases take the scenic route to the same work:
+
+| Scenic route              | Standard command           | What it does                                        |
+| ------------------------- | -------------------------- | --------------------------------------------------- |
+| `npm run assemble`        | `npm run build`            | Build the library.                                  |
+| `npm run radical`         | `npm test`                 | Run the tests.                                      |
+| `npm run survey`          | `npm run docs:check`       | Check source documentation and generated contracts. |
+| `npm run blueprint`       | `npm run docs`             | Regenerate the contract artifacts.                  |
+| `npm run keep-it-tubular` | `npm run check`            | Run the full project check.                         |
+| `npm run flow`            | `npm run example`          | Build and run the read-only example.                |
+| `npm run deep-dive`       | `npm run example:governed` | Build and run the governed example.                 |
+
+`blueprint` regenerates checked-in documentation. `flow` and `deep-dive` build and regenerate example files. `survey` checks documentation without rewriting it.
+
 ## Declare a capability
 
 ```ts
-/** Case-insensitive search inside the host-selected workspace. */
 export interface ProjectQuery {
-  /**
-   * Substring to find within a project name.
-   * @minLength 1
-   * @maxLength 100
-   * @example "tubular"
-   */
+  /** Words to match in a project name. */
   query: string;
-  /**
-   * Maximum matches. The handler uses 10 when omitted.
-   * @isInt
-   * @minimum 1
-   * @maximum 100
-   * @default 10
-   */
   limit?: number;
 }
 
-/** Matching names in the host's original order. */
 export interface ProjectMatches {
-  /** An empty list is a successful search with no matches. */
   projects: string[];
 }
 
-/** Trusted selection supplied separately from model arguments. */
 export interface WorkspaceContext {
-  /** Names the host has authorized this session to inspect. */
   projects: readonly string[];
 }
 
-/**
- * Find projects in the selected workspace without fetching additional context.
- * @tubular
- * @summary Find projects
- * @example {"query":"tubular","limit":5}
- * @returns Matching project names, capped by the requested limit.
- */
+/** @tubular */
 export function findProjects(input: ProjectQuery, context: WorkspaceContext): ProjectMatches {
   return {
     projects: context.projects
@@ -80,8 +89,6 @@ Use `--functions findProjects,otherTool` to select named exported functions expl
 
 The compiler supports closed objects, structural object intersections, required and optional properties, mutable and readonly arrays, JSON primitives, literal types, and unions of supported types. Unsupported constructs, such as recursive types, `any`, index signatures, tuples, primitive brands, and explicit function `this` parameters, fail compilation. Tool inputs must have a top-level object schema. MCP outputs may be objects or unions containing only object alternatives. The compiler checks the TypeScript project before generating and requires `strictNullChecks` (or `strict`). These are JSON contracts: optional properties may be omitted, but explicit JavaScript `undefined` is not JSON.
 
-Source interface/property descriptions, examples, defaults, and supported constraints flow into schemas. Function prose and summary flow into capability discovery and native MCP/OpenAPI metadata. Numeric bounds, integer assertions, string/array bounds, patterns, and UUID format are enforced by the runtime. Defaults are documentation only. Unsupported tags, invalid examples, and ambiguous inherited or intersection annotations fail clearly. See the [source contract guide](docs/SOURCE_CONTRACTS.md) for the exact vocabulary and limitations.
-
 Use the same command with `--check` in CI to fail when checked-in generated schemas have drifted from the TypeScript source.
 
 ```sh
@@ -100,6 +107,7 @@ const runtime = createToolRuntime({
   definitions: [
     findProjects({
       name: "projects.find",
+      description: "Find projects in the selected workspace.",
       effect: "read",
     }),
   ],
@@ -124,8 +132,6 @@ The host registers issuer, context-registration, and approval authority objects 
 `invoke` offers adapter convenience: an approval-required proposal returns `ask` with a proposal ID and digest, and an approval-free proposal executes through the same kernel. Only the host control surface can approve or resume. Keep the runtime's raw kernel and authority objects out of model access.
 
 The current integration enforces canonical workspace resource scopes. State, deduplication, approvals, and audit are in memory. Restart recovery, authenticated human review, generalized resource policies, and durable effect reconciliation are unfinished. Do not infer those properties from a passing demo.
-
-Every independent proposal receives a new identity, even for identical arguments and timestamps. Its digest includes that identity, so approval cannot transfer to another submission. Re-executing the same proposal returns its receipt without redispatch; concurrent executions share one dispatch. The default namespace is random per kernel, with a host-controlled deterministic namespace for tests. This provides no cross-process replay store.
 
 For MCP, bind the same runtime and a trusted session context:
 
@@ -158,6 +164,6 @@ For the governed runtime, pass an opaque session as the MCP context. The MCP ada
 - Capability manifest and OpenAPI 3.1 contract projections from the same runtime descriptors. The OpenAPI document does not itself run an HTTP server.
 - The earlier experimental protocol vocabulary, proposal-only gateway and projections, plus the kernel now reused by the governed typed path. See [the prototype notes](docs/LEGACY_PROTOTYPE.md) and [trust model](docs/TRUST_MODEL.md).
 
-`npm run check` runs Biome, engineering-rule and source-documentation checks, verifies generated artifacts without rewriting them, validates OpenAPI 3.1 and embedded JSON Schema, typechecks and builds, runs tests, checks generated example bindings, executes the governed example, and tests the packed package in an isolated consumer directory. That offline consumer uses the installed dependency versions; it is not a fresh dependency-resolution or cross-platform compatibility claim.
+`npm run check` verifies generated documentation without rewriting it, typechecks and builds the library, runs tests, checks generated example bindings, runs the governed example, and tests the packed package in an isolated consumer directory. That offline consumer uses the installed dependency versions; it is not a fresh dependency-resolution or cross-platform compatibility claim.
 
 This is a first implementation, not a claim that every part of the broader AAPI, MCCP, context-plane and multi-provider vision is finished. The package is marked private pending a release and licensing decision. This build has not been published.
