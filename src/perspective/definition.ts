@@ -9,7 +9,7 @@ import {
 } from "../core/json.js";
 
 /** Experimental portable definition version discriminator; it is not a finalized MCCP specification. */
-export const PORT_AUTHORITY_PROTOCOL = "port-authority/v0" as const;
+export const PERSPECTIVE_PROTOCOL = "perspective/v0" as const;
 
 /** Declared effect on local state; this discovery classification does not enforce read-only behavior. */
 export type StateInteraction = "none" | "read" | "create" | "update" | "delete";
@@ -29,7 +29,7 @@ export type Reversibility =
 export type Retryability = "never" | "safe" | "conditional" | "unknown";
 
 /** Compact content-addressed reference to one portable contract definition and version. */
-export interface PortAuthorityReference extends JsonObject {
+export interface PerspectiveReference extends JsonObject {
   /** Content-derived identifier of the referenced sealed portable definition. */
   readonly id: string;
   /** Full lowercase SHA-256 digest of the referenced canonical portable definition body. */
@@ -37,7 +37,7 @@ export interface PortAuthorityReference extends JsonObject {
   /** Explicit contract or component version; callers should not infer compatibility from matching names alone. */
   readonly version: string;
   /** Exact experimental portable-definition version required to interpret the contract. */
-  readonly specification: typeof PORT_AUTHORITY_PROTOCOL;
+  readonly specification: typeof PERSPECTIVE_PROTOCOL;
 }
 
 /** Named resource category and schema for its identity, with declared parent-kind relationships. */
@@ -267,9 +267,9 @@ export interface CapabilityDefinition extends JsonObject {
 }
 
 /** Canonical portable application contract before its content-derived identifier and digest are added. */
-export interface PortAuthorityBody extends JsonObject {
+export interface PerspectiveBody extends JsonObject {
   /** Exact experimental portable-definition version required to interpret the contract. */
-  readonly specification: typeof PORT_AUTHORITY_PROTOCOL;
+  readonly specification: typeof PERSPECTIVE_PROTOCOL;
   /** Stable application contract name used alongside its explicit version. */
   readonly name: string;
   /** Explicit contract or component version; callers should not infer compatibility from matching names alone. */
@@ -299,7 +299,7 @@ export interface PortAuthorityBody extends JsonObject {
 }
 
 /** Sealed portable contract with a canonical SHA-256 digest; integrity is not sender authentication. */
-export interface PortAuthorityDefinition extends PortAuthorityBody {
+export interface PerspectiveDefinition extends PerspectiveBody {
   /** Content-derived identifier computed from this record's canonical digest; it is not a bearer credential. */
   readonly id: string;
   /** Lowercase SHA-256 hex over the canonical record body, excluding the derived id and digest; this proves integrity, not authenticity. */
@@ -307,7 +307,7 @@ export interface PortAuthorityDefinition extends PortAuthorityBody {
 }
 
 /** Authoring input normalized into a canonical portable definition; omitted optional collections become empty. */
-export interface PortAuthoritySource {
+export interface PerspectiveSource {
   /** Author-selected stable application contract name, validated before content addressing. */
   readonly name: string;
   /** Explicit contract or component version; callers should not infer compatibility from matching names alone. */
@@ -337,7 +337,7 @@ export interface PortAuthoritySource {
 }
 
 /** Location and category of a portable definition's structural or semantic inconsistency. */
-export interface PortAuthorityConformanceIssue extends JsonObject {
+export interface PerspectiveConformanceIssue extends JsonObject {
   /** Slash-delimited location of the invalid contract or value; this is not a filesystem path. */
   readonly path: string;
   /** Stable diagnostic category used for programmatic handling instead of parsing display text. */
@@ -347,11 +347,11 @@ export interface PortAuthorityConformanceIssue extends JsonObject {
 }
 
 /** Conformance result collecting issues without turning a malformed definition into an executable contract. */
-export interface PortAuthorityConformanceReport extends JsonObject {
+export interface PerspectiveConformanceReport extends JsonObject {
   /** True only when no structural or semantic conformance issues were found. */
   readonly conforms: boolean;
   /** All detected conformance problems; an empty list accompanies a conforming definition. */
-  readonly issues: readonly PortAuthorityConformanceIssue[];
+  readonly issues: readonly PerspectiveConformanceIssue[];
 }
 
 const semanticVersionPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/;
@@ -444,8 +444,8 @@ function assertAuthorityJson(requirement: AuthorityRequirement): void {
 }
 
 /** Validate JSON fragments throughout a portable authoring input before normalization. */
-function assertSourceJson(source: PortAuthoritySource): void {
-  assertJsonFragment(source.extensions ?? {}, "Port Authority extensions");
+function assertSourceJson(source: PerspectiveSource): void {
+  assertJsonFragment(source.extensions ?? {}, "Perspective extensions");
   for (const resource of source.resourceKinds ?? []) {
     assertJsonFragment(resource.identitySchema, `Identity schema ${resource.id}`);
   }
@@ -463,7 +463,7 @@ function assertSourceJson(source: PortAuthoritySource): void {
 function collectSchemaIssues(
   value: JsonValue,
   path: string,
-  issues: PortAuthorityConformanceIssue[],
+  issues: PerspectiveConformanceIssue[],
 ): void {
   if (Array.isArray(value)) {
     value.forEach((child, index) => collectSchemaIssues(child, `${path}/${index}`, issues));
@@ -488,7 +488,7 @@ function collectSchemaIssues(
 function collectCanonicalKeyIssues(
   value: JsonValue,
   path: string,
-  issues: PortAuthorityConformanceIssue[],
+  issues: PerspectiveConformanceIssue[],
 ): void {
   if (Array.isArray(value)) {
     value.forEach((child, index) => collectCanonicalKeyIssues(child, `${path}/${index}`, issues));
@@ -615,7 +615,7 @@ function normalizeLifecycle(lifecycle: LifecycleDefinition): LifecycleDefinition
 }
 
 /** Normalize optional collections to empty values and sort portable declarations before hashing. */
-function buildBody(source: PortAuthoritySource): PortAuthorityBody {
+function buildBody(source: PerspectiveSource): PerspectiveBody {
   const resourceKinds = (source.resourceKinds ?? [])
     .map((definition) => ({
       ...definition,
@@ -647,7 +647,7 @@ function buildBody(source: PortAuthoritySource): PortAuthorityBody {
     .sort(compareById);
 
   return {
-    specification: PORT_AUTHORITY_PROTOCOL,
+    specification: PERSPECTIVE_PROTOCOL,
     name: source.name,
     version: source.version,
     title: source.title,
@@ -665,7 +665,7 @@ function buildBody(source: PortAuthoritySource): PortAuthorityBody {
 }
 
 /** Reject unresolved resource, context, authority, effect, and lifecycle references and inconsistent bounds. */
-function assertReferences(body: PortAuthorityBody): void {
+function assertReferences(body: PerspectiveBody): void {
   const resourceKinds = new Set(body.resourceKinds.map((item) => item.id));
   const contextKinds = new Set(body.contextKinds.map((item) => item.id));
   const authoritySchemes = new Set(body.authoritySchemes.map((item) => item.id));
@@ -744,8 +744,8 @@ function assertReferences(body: PortAuthorityBody): void {
 }
 
 /** Collect conformance issues without executing capabilities or trusting descriptive authority claims. */
-export function inspectPortAuthorityBody(body: PortAuthorityBody): PortAuthorityConformanceReport {
-  const issues: PortAuthorityConformanceIssue[] = [];
+export function inspectPerspectiveBody(body: PerspectiveBody): PerspectiveConformanceReport {
+  const issues: PerspectiveConformanceIssue[] = [];
   collectCanonicalKeyIssues(body, "", issues);
   for (const resource of body.resourceKinds) {
     collectSchemaIssues(
@@ -780,14 +780,14 @@ export function inspectPortAuthorityBody(body: PortAuthorityBody): PortAuthority
 }
 
 /** Validate, normalize, hash, and freeze one portable definition; reject inconsistent schemas or references. */
-export function definePortAuthority(source: PortAuthoritySource): PortAuthorityDefinition {
+export function definePerspective(source: PerspectiveSource): PerspectiveDefinition {
   assertSourceJson(source);
-  assertIdentifier(source.name, "Port Authority name");
-  assertVersion(source.version, "Port Authority version");
-  assertText(source.title, "Port Authority title");
-  assertText(source.description, "Port Authority description");
+  assertIdentifier(source.name, "Perspective name");
+  assertVersion(source.version, "Perspective version");
+  assertText(source.title, "Perspective title");
+  assertText(source.description, "Perspective description");
   if (source.capabilities.length === 0) {
-    throw new TypeError("A Port Authority must declare at least one capability");
+    throw new TypeError("A Perspective must declare at least one capability");
   }
 
   const body = buildBody(source);
@@ -828,12 +828,12 @@ export function definePortAuthority(source: PortAuthoritySource): PortAuthorityD
     }
   }
   assertReferences(body);
-  const report = inspectPortAuthorityBody(body);
+  const report = inspectPerspectiveBody(body);
   if (!report.conforms) {
     const first = report.issues[0];
     throw new TypeError(
       first === undefined
-        ? "Port Authority does not conform"
+        ? "Perspective does not conform"
         : `${first.code} at ${first.path}: ${first.message}`,
     );
   }
@@ -841,13 +841,13 @@ export function definePortAuthority(source: PortAuthoritySource): PortAuthorityD
   const digest = sha256(stableStringify(body));
   return deepFreezeJsonObject({
     ...body,
-    id: `port_authority_${digest.slice(0, 24)}`,
+    id: `perspective_${digest.slice(0, 24)}`,
     digest,
   });
 }
 
 /** Extract canonical definition fields without the derived identifier and digest. */
-export function portAuthorityBody(definition: PortAuthorityDefinition): PortAuthorityBody {
+export function perspectiveBody(definition: PerspectiveDefinition): PerspectiveBody {
   return {
     specification: definition.specification,
     name: definition.name,
@@ -867,12 +867,12 @@ export function portAuthorityBody(definition: PortAuthorityDefinition): PortAuth
 }
 
 /** Verify conformance and recompute the canonical digest; a valid digest is not a signature. */
-export function verifyPortAuthorityIntegrity(definition: PortAuthorityDefinition): boolean {
+export function verifyPerspectiveIntegrity(definition: PerspectiveDefinition): boolean {
   try {
-    if (definition.specification !== PORT_AUTHORITY_PROTOCOL) {
+    if (definition.specification !== PERSPECTIVE_PROTOCOL) {
       return false;
     }
-    const rebuilt = definePortAuthority({
+    const rebuilt = definePerspective({
       name: definition.name,
       version: definition.version,
       title: definition.title,
@@ -894,9 +894,7 @@ export function verifyPortAuthorityIntegrity(definition: PortAuthorityDefinition
 }
 
 /** Verify a sealed definition and return its compact identifier, version, and digest reference. */
-export function referencePortAuthority(
-  definition: PortAuthorityDefinition,
-): PortAuthorityReference {
+export function referencePerspective(definition: PerspectiveDefinition): PerspectiveReference {
   return deepFreezeJsonObject({
     id: definition.id,
     digest: definition.digest,

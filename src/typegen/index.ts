@@ -3,6 +3,13 @@ import ts from "typescript";
 import type { ToolDocumentation } from "../contracts/documentation.js";
 import { isJsonValue, type JsonValue, sha256 } from "../core/json.js";
 import { validateSchema } from "../type-validation/index.js";
+import {
+  type CompilerFileSystem,
+  compilerHost,
+  createNodeCompilerFileSystem,
+} from "./file-system.js";
+
+export { type CompilerFileSystem, createNodeCompilerFileSystem } from "./file-system.js";
 
 /** A deliberately bounded JSON Schema subset emitted by Tubular. */
 export interface JsonSchema {
@@ -53,21 +60,23 @@ export interface JsonSchema {
 }
 
 /** Compiler inputs selecting exported TypeScript models from a strict project. */
-export interface CompileTypeSchemasOptions {
-  /** Path to the strict TypeScript project configuration, resolved from the current working directory. */
-  tsconfigPath: string;
-  /** Source module path relative to the tsconfig directory; its exported models are eligible for generation. */
-  entryFile: string;
+export interface CompileTypeSchemasOptions extends SchemaProjectOptions {
   /** Exported model names to compile, deduplicated and sorted for deterministic output. */
   typeNames: readonly string[];
 }
 
-/** Compiler inputs selecting exported functions whose first parameter and return value define tool contracts. */
-export interface CompileToolSchemasOptions {
-  /** Path to the strict TypeScript project configuration, resolved from the current working directory. */
+/** One strict project snapshot; reuse a compiler session for related artifacts. */
+export interface SchemaProjectOptions {
+  /** Strict project configuration path, resolved from the selected filesystem's current directory. */
   tsconfigPath: string;
-  /** Source module path relative to the tsconfig directory; its exported functions are eligible for generation. */
+  /** Source module path relative to the tsconfig directory; its exported models are eligible for generation. */
   entryFile: string;
+  /** Optional host project reader. Defaults to Node filesystem access; no compiler writes occur. */
+  fileSystem?: CompilerFileSystem;
+}
+
+/** Compiler inputs selecting exported functions whose first parameter and return value define tool contracts. */
+export interface CompileToolSchemasOptions extends SchemaProjectOptions {
   /** Exported function names to compile, deduplicated and sorted; overloads and generic tool signatures are rejected. */
   functionNames: readonly string[];
 }
@@ -84,6 +93,12 @@ export interface ToolSchemas {
 
 /** TypeScript program, checker, and entry export table shared during one compilation. */
 interface Compiler {
+  /** Host working directory captured for resolving generated output paths consistently. */
+  currentDirectory: string;
+  /** Absolute entry path captured with this immutable program snapshot. */
+  entryPath: string;
+  /** Absolute configuration directory used for relative provenance and imports. */
+  directory: string;
   /** TypeScript semantic checker used to preserve resolved property and union types. */
   checker: ts.TypeChecker;
   /** Entry module export table, including aliases resolved before schema compilation. */
@@ -93,30 +108,37 @@ interface Compiler {
 }
 
 /** Load the project, require strict nullability, reject TypeScript errors, and resolve the entry export table. */
-function createCompiler(tsconfigPath: string, entryFile: string): Compiler {
-  const configPath = path.resolve(tsconfigPath);
+function createCompiler(options: SchemaProjectOptions): Compiler {
+  const files = options.fileSystem ?? createNodeCompilerFileSystem();
+  const currentDirectory = files.getCurrentDirectory();
+  const configPath = path.resolve(currentDirectory, options.tsconfigPath);
   const configDir = path.dirname(configPath);
-  const entryPath = path.resolve(configDir, entryFile);
-  const config = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (config.error) throw new Error(formatDiagnostics([config.error]));
+  const entryPath = path.resolve(configDir, options.entryFile);
+  const config = ts.readConfigFile(configPath, (file) => files.readFile(file));
+  if (config.error) throw new Error(formatDiagnostics([config.error], files, currentDirectory));
   const parsed = ts.parseJsonConfigFileContent(
     config.config,
-    ts.sys,
+    files,
     configDir,
     { noEmit: true, noCheck: false },
     configPath,
   );
-  if (parsed.errors.length) throw new Error(formatDiagnostics(parsed.errors));
-  if (!(parsed.options.strictNullChecks ?? parsed.options.strict ?? false)) {
+  if (parsed.errors.length)
+    throw new Error(formatDiagnostics(parsed.errors, files, currentDirectory));
+  if (!(parsed.options.strictNullChecks ?? parsed.options.strict !== false)) {
     throw new Error(
       "strictNullChecks must be enabled to preserve nullability in generated schemas",
     );
   }
-  const program = ts.createProgram([...new Set([...parsed.fileNames, entryPath])], parsed.options);
+  const program = ts.createProgram(
+    [...new Set([...parsed.fileNames, entryPath])],
+    parsed.options,
+    compilerHost(parsed.options, files, currentDirectory),
+  );
   const errors = ts
     .getPreEmitDiagnostics(program)
     .filter((d) => d.category === ts.DiagnosticCategory.Error);
-  if (errors.length) throw new Error(formatDiagnostics(errors));
+  if (errors.length) throw new Error(formatDiagnostics(errors, files, currentDirectory));
   const source = program.getSourceFile(entryPath);
   if (!source) throw new Error(`Entry file not found: ${entryPath}`);
   const checker = program.getTypeChecker();
@@ -125,14 +147,18 @@ function createCompiler(tsconfigPath: string, entryFile: string): Compiler {
   const exports = new Map(
     checker.getExportsOfModule(module).map((symbol) => [symbol.getName(), symbol]),
   );
-  return { checker, exports, program };
+  return { checker, exports, program, entryPath, directory: configDir, currentDirectory };
 }
 
 /** Render TypeScript diagnostics with file locations for actionable compiler and CLI errors. */
-function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string {
+function formatDiagnostics(
+  diagnostics: readonly ts.Diagnostic[],
+  files: CompilerFileSystem,
+  currentDirectory: string,
+): string {
   return ts.formatDiagnosticsWithColorAndContext(diagnostics, {
-    getCanonicalFileName: (file) => file,
-    getCurrentDirectory: ts.sys.getCurrentDirectory,
+    getCanonicalFileName: (file) => (files.useCaseSensitiveFileNames ? file : file.toLowerCase()),
+    getCurrentDirectory: () => currentDirectory,
     getNewLine: () => "\n",
   });
 }
@@ -494,9 +520,13 @@ function schemaShapeFor(
 
 /** Derive closed schemas from named TypeScript type exports. Paths are relative to the tsconfig directory. */
 export function compileTypeSchemas(options: CompileTypeSchemasOptions): Record<string, JsonSchema> {
-  const compiler = createCompiler(options.tsconfigPath, options.entryFile);
+  return createSchemaCompiler(options).compileTypes(options.typeNames);
+}
+
+/** Compile named model contracts from an already checked project snapshot. */
+function typeSchemas(compiler: Compiler, names: readonly string[]): Record<string, JsonSchema> {
   const result: Record<string, JsonSchema> = {};
-  for (const name of [...new Set(options.typeNames)].sort()) {
+  for (const name of [...new Set(names)].sort()) {
     const symbol = exportedSymbol(compiler, name);
     for (const declaration of symbol.declarations ?? [])
       inspectDocumentationDependencies(declaration, compiler.checker);
@@ -515,8 +545,7 @@ export function compileTypeSchemas(options: CompileTypeSchemasOptions): Record<s
 export function compileToolSchemas(
   options: CompileToolSchemasOptions,
 ): Record<string, ToolSchemas> {
-  const compiler = createCompiler(options.tsconfigPath, options.entryFile);
-  return toolSchemas(compiler, options.functionNames);
+  return createSchemaCompiler(options).compileTools(options.functionNames);
 }
 
 /** Derive one input, awaited output, and source documentation record per supported exported function. */
@@ -618,11 +647,18 @@ export interface CompileToolBindingsOptions extends CompileToolSchemasOptions {
 
 /** Generate direct imports and immutable schema/handler factories, never a name lookup. */
 export function compileToolBindings(options: CompileToolBindingsOptions): string {
-  const compiler = createCompiler(options.tsconfigPath, options.entryFile);
-  const schemas = toolSchemas(compiler, options.functionNames);
-  const directory = path.dirname(path.resolve(options.tsconfigPath));
-  const entry = path.resolve(directory, options.entryFile);
-  const output = path.resolve(options.outputFile);
+  return createSchemaCompiler(options).compileBindings(options.functionNames, options.outputFile);
+}
+
+/** Render direct bindings using the same checked program as the schema projection. */
+function toolBindings(
+  compiler: Compiler,
+  schemas: Record<string, ToolSchemas>,
+  outputFile: string,
+): string {
+  const directory = compiler.directory;
+  const entry = compiler.entryPath;
+  const output = path.resolve(compiler.currentDirectory, outputFile);
   if (entry === output) throw new Error("Bindings must not overwrite their source entry");
   if (!/\.(?:ts|mts|cts)$/.test(entry) || /\.d\.(?:ts|mts|cts)$/.test(entry))
     throw new Error("Bindings require a TypeScript implementation entry");
@@ -660,4 +696,36 @@ export function compileToolBindings(options: CompileToolBindingsOptions): string
     lines.push(`export { binding${index} as ${JSON.stringify(name)} };`);
   });
   return `${lines.join("\n")}\n`;
+}
+
+/** Reusable checked project snapshot. Create a new session after changing source files. */
+export interface SchemaCompiler {
+  /** Derive selected exported model schemas without recompiling the TypeScript project. */
+  compileTypes(names: readonly string[]): Record<string, JsonSchema>;
+  /** Derive selected handler schemas and documentation from this exact project snapshot. */
+  compileTools(names: readonly string[]): Record<string, ToolSchemas>;
+  /** Render direct bindings without emitting; output paths resolve from the captured host working directory. */
+  compileBindings(names: readonly string[], outputFile: string): string;
+}
+
+/** Check a project once, then derive related contracts from the same immutable source snapshot. */
+export function createSchemaCompiler(options: SchemaProjectOptions): SchemaCompiler {
+  const compiler = createCompiler(options);
+  const toolCache = new Map<string, Record<string, ToolSchemas>>();
+  const projectTools = (names: readonly string[]): Record<string, ToolSchemas> => {
+    const selected = [...new Set(names)].sort();
+    const key = JSON.stringify(selected);
+    let schemas = toolCache.get(key);
+    if (schemas === undefined) {
+      schemas = toolSchemas(compiler, selected);
+      toolCache.set(key, schemas);
+    }
+    return structuredClone(schemas);
+  };
+  return Object.freeze({
+    compileTypes: (names: readonly string[]) => typeSchemas(compiler, names),
+    compileTools: projectTools,
+    compileBindings: (names: readonly string[], outputFile: string) =>
+      toolBindings(compiler, projectTools(names), outputFile),
+  });
 }

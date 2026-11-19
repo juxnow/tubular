@@ -3,7 +3,7 @@ import { issueAuthorityLease } from "../authority/types.js";
 import { createDefaultRegistry } from "../catalog.js";
 import { buildContextManifest } from "../context/manifest.js";
 import { SystemClock } from "../core/time.js";
-import { portAuthorityFromRegistry } from "../profiles/totally-tubular.js";
+import { perspectiveFromRegistry } from "../profiles/totally-tubular.js";
 import {
   ContextRegistrationAuthority,
   LeaseIssuerAuthority,
@@ -78,8 +78,8 @@ function start(): void {
     },
     { maxCallsPerWindow: 60, windowMs: 60_000 },
   );
-  const portAuthority = portAuthorityFromRegistry(registry);
-  const handle = serveStdio(() => buildMcpServer(portAuthority, gateway), {
+  const perspective = perspectiveFromRegistry(registry);
+  const handle = serveStdio(() => buildMcpServer(perspective, gateway), {
     legacy: "serve",
     transport: new StdioServerTransport(process.stdin, process.stdout, {
       maxBufferSize: 1_048_576,

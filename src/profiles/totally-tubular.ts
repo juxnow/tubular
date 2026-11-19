@@ -1,14 +1,13 @@
 import type { ContractRegistry } from "../contracts/registry.js";
-import { definePortAuthority, type PortAuthorityDefinition } from "../port-authority/definition.js";
+import { definePerspective, type PerspectiveDefinition } from "../perspective/definition.js";
 
 /** Derive the experimental portable application definition from canonical registered kernel contracts. */
-export function portAuthorityFromRegistry(registry: ContractRegistry): PortAuthorityDefinition {
-  return definePortAuthority({
+export function perspectiveFromRegistry(registry: ContractRegistry): PerspectiveDefinition {
+  return definePerspective({
     name: "totally-tubular.reference-runtime",
-    version: "0.1.0",
+    version: "0.2.0",
     title: "Totally Tubular reference runtime",
-    description:
-      "A provider-neutral, bounded-agency runtime described by a Port Authority manifest.",
+    description: "A provider-neutral, bounded-agency runtime described by a Perspective manifest.",
     scopeKinds: ["private", "project", "external-resource"],
     resourceKinds: [
       {

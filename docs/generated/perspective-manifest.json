@@ -241,8 +241,8 @@
       "selection": "explicit"
     }
   ],
-  "description": "A provider-neutral, bounded-agency runtime described by a Port Authority manifest.",
-  "digest": "e56be50bf98a7e2716c116edbe05c103bb6f03163791227eb27c71aacc6551f4",
+  "description": "A provider-neutral, bounded-agency runtime described by a Perspective manifest.",
+  "digest": "9b81954b074ea53e233f4fc3d4ceab93d706ff6e16f9ed7be14ac729dbdf81a2",
   "effectKinds": [
     {
       "description": "Delete or irreversibly replace state.",
@@ -281,7 +281,7 @@
     }
   ],
   "extensions": {},
-  "id": "port_authority_e56be50bf98a7e2716c116ed",
+  "id": "perspective_9b81954b074ea53e233f4fc3",
   "lifecycles": [
     {
       "description": "A proposal is evaluated, optionally approved, dispatched, and reconciled to evidence.",
@@ -383,7 +383,7 @@
     "private",
     "project"
   ],
-  "specification": "port-authority/v0",
+  "specification": "perspective/v0",
   "title": "Totally Tubular reference runtime",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

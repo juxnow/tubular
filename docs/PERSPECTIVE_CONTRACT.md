@@ -1,10 +1,10 @@
-# Port Authority Protocol v0
+# Perspective: experimental capability contract
 
 ## Purpose
 
-Port Authority is a portable semantic contract for describing an agent-operable system. It identifies what a system can do, what information an operation consumes and returns, what resources it addresses, what authority it requires, what effects it may cause, and how its outcomes are represented.
+Perspective is the direction for expressing viewpoints and capability contracts across an agent-operable system. The current prototype implements a portable semantic contract: it identifies what a system can do, what information an operation consumes and returns, what resources it addresses, what authority it requires, what effects it may cause, and how its outcomes are represented. It is not yet the complete personal-perspective concept.
 
-Port Authority is not:
+Perspective is not:
 
 - An approval user interface.
 - A runtime API.
@@ -13,57 +13,26 @@ Port Authority is not:
 - A workflow engine.
 - An assumption that a language model is involved.
 
-A deterministic program, a human-operated client, a scheduled job, an agent, or a model-backed service can all operate against the same Port Authority manifest. Models have no special authority in the protocol.
+A deterministic program, a human-operated client, a scheduled job, an agent, or a model-backed service can all operate against the same Perspective manifest. Models have no special authority in the protocol.
 
-The current protocol identifier is `port-authority/v0`. This is an experimental version whose types and compatibility rules may still change before a stable specification is published.
+The current protocol identifier is `perspective/v0`. This is an experimental version whose types and compatibility rules may still change before a stable specification is published.
 
-## Corrected hierarchy
+## How the pieces relate
 
-The dependency direction is:
+The experimental Perspective manifest is serializable data. It contains no handlers, SDK objects, transport routes, live credentials, or executable policy functions. The current projection compiler verifies a manifest and derives a catalog, proposal-only MCP descriptors, and documentation-only OpenAPI. A projection does not create a live endpoint.
 
-```text
-Port Authority Protocol
-  portable semantic contract
-          +-> Second Service
-          |     validator, compiler, conformance checker, projection engine
-          +-> Totally Tubular
-          |     reference runtime and opinionated authority profile
-          +-> AAPI
-          |     concrete compatible application architecture
-          +-> MCP, WebMCP, HTTP, CLI, Discord, UI
-                non-canonical projections and adapters
-```
+**Through the Looking Glass** is the portal in the architectural direction. The current compiler's projection work is one part of that direction; the complete portal is not yet implemented. AAPI (Agentic Application Programming Interface) and MCCP (Model Context & Convergence Protocol) are technologies; these experiments do not establish a finalized MCCP specification.
 
-### Port Authority Protocol
+**sincopar** names the context-plane direction. “con text” is creative framing around that name. Existing host-selected, in-memory context manifests are a partial implementation, not a completed personal context plane. Serenity is a separate future service.
 
-Port Authority defines the portable vocabulary and invariants. Its manifest is serializable data. It contains no handlers, SDK objects, transport routes, live credentials, or executable policy functions.
-
-### Second Service
-
-Second Service consumes a Port Authority manifest. Its responsibilities are validation, deterministic compilation, conformance reporting, compatibility analysis, and projection into other representations. A projection may produce MCP descriptors, WebMCP registrations, OpenAPI-shaped documentation, HTTP bindings, CLI help, or another derived artifact.
-
-Second Service does not turn a documentation projection into a real endpoint. It must report any semantic information that a target format cannot faithfully represent.
-
-### Totally Tubular
-
-Totally Tubular is the reference implementation and conformance laboratory. Its leases, exact-digest approvals, proposal lifecycle, policy kernel, receipts, audit chain, and proposal-only MCP boundary are one strong runtime and authority profile. They are not universal requirements imposed on every Port Authority.
-
-### AAPI
-
-AAPI is a concrete application architecture that can publish a compatible Port Authority. Capabilities such as `agent.respond`, `content.explain`, `communication.draft`, `memory.propose`, or `task.create` can be described without making a model provider, Discord, or any other platform part of their canonical identity.
-
-### Projections and adapters
-
-MCP, WebMCP, HTTP, CLI, Discord, and UI integrations are consumers and projections of a Port Authority manifest. They translate between their native protocol and canonical Port Authority semantics. They must not become the source of resource identities, capability names, authority rules, or effect declarations.
-
-An approval UI is therefore one possible operator client over a runtime. It is not Port Authority itself.
+Tubular's current leases, approvals, policy kernel, receipts, and audit are one in-memory runtime profile. A host remains responsible for identity and for any approval interface; descriptions alone do not enforce authority.
 
 ## Canonical definition
 
-The implementation in `src/port-authority/definition.ts` defines `PortAuthorityDefinition` as the content-addressed form of `PortAuthorityBody`. Its canonical fields are:
+The implementation in `src/perspective/definition.ts` defines `PerspectiveDefinition` as the content-addressed form of `PerspectiveBody`. Its canonical fields are:
 
-- `specification`: the Port Authority protocol version.
-- `name`: a stable lowercase dotted Port Authority name.
+- `specification`: the Perspective protocol version.
+- `name`: a stable lowercase dotted Perspective name.
 - `version`: the semantic version of this manifest.
 - `title` and `description`: human-readable intent.
 - `scopeKinds`: application-defined kinds of scope.
@@ -100,7 +69,7 @@ A capability may use a model internally, but model use is not part of its identi
 
 ## Orthogonal effect model
 
-Port Authority deliberately does not collapse every consequence into a single ordered risk label. `EffectKindDefinition` represents three independent dimensions:
+Perspective deliberately does not collapse every consequence into a single ordered risk label. `EffectKindDefinition` represents three independent dimensions:
 
 ### State interaction
 
@@ -144,7 +113,7 @@ Disclosure is declared per effect rather than inferred from external interaction
 
 This distinction matters because an external compute can disclose private data without writing application state, while an external write may send only a public identifier. State mutation, external interaction, disclosure, and reversibility must remain separately inspectable.
 
-Totally Tubular's existing labels such as `read`, `draft`, `workspace-write`, `external-write`, and `destructive` are its reference effect vocabulary. Other compatible Port Authority manifests may define different effect kinds while preserving the orthogonal fields.
+Totally Tubular's existing labels such as `read`, `draft`, `workspace-write`, `external-write`, and `destructive` are its reference effect vocabulary. Other compatible Perspective manifests may define different effect kinds while preserving the orthogonal fields.
 
 ## Context and authority
 
@@ -175,7 +144,7 @@ An adapter may implement these semantics more conservatively. It may not silentl
 
 Every conforming implementation must preserve these rules:
 
-1. The canonical Port Authority manifest is pure serializable data. Executable handlers and policy functions are runtime bindings.
+1. The canonical Perspective manifest is pure serializable data. Executable handlers and policy functions are runtime bindings.
 2. Context, identity, scope, and authority remain distinct concepts.
 3. Context presence never grants authority.
 4. A capability's effects form an upper bound on what an implementation may do.
@@ -183,7 +152,7 @@ Every conforming implementation must preserve these rules:
 6. Every resource target refers to a declared resource kind and is resolved from declared input.
 7. Every context, authority, effect, and lifecycle reference resolves within the manifest.
 8. Every object-shaped schema is closed.
-9. A capability invocation and its outcome must be attributable to an exact Port Authority and capability version.
+9. A capability invocation and its outcome must be attributable to an exact Perspective and capability version.
 10. Provenance and content digests are evidence of claimed lineage and integrity, not proof that a claim is true.
 11. Unknown external outcomes are never represented as known failures or automatic retry permission.
 12. Provider, SDK, transport, and interface types do not enter canonical capability contracts.
@@ -210,11 +179,11 @@ Projection data answers representation questions:
 - Which CLI syntax maps to its input?
 - Which UI control renders an authority challenge?
 
-`inspectPortAuthorityBody` currently rejects transport and projection keys such as `mcpName`, `httpMethod`, `operationId`, `path`, `servers`, `transport`, `wrapperName`, `proposalOnly`, `documentationOnly`, and `x-network-endpoint` when they appear as protocol structure. JSON Schemas and authority claims remain opaque domain data, so a capability may legitimately accept a field called `path` or `transport`.
+`inspectPerspectiveBody` currently rejects transport and projection keys such as `mcpName`, `httpMethod`, `operationId`, `path`, `servers`, `transport`, `wrapperName`, `proposalOnly`, `documentationOnly`, and `x-network-endpoint` when they appear as protocol structure. JSON Schemas and authority claims remain opaque domain data, so a capability may legitimately accept a field called `path` or `transport`.
 
 A projection should identify at least:
 
-- The exact source Port Authority ID, version, and digest.
+- The exact source Perspective ID, version, and digest.
 - The projector ID and version.
 - The target format and binding configuration.
 - Whether the projection is lossless or lossy.
@@ -225,7 +194,9 @@ An OpenAPI-shaped artifact must not claim that synthetic paths are reachable net
 
 ## Compatibility rules
 
-The protocol specification version, Port Authority version, and capability version are independent.
+The protocol specification version, Perspective version, and capability version are independent.
+
+The Perspective rename is recorded in the package and reference manifest as 0.2.0. See [migration from the 0.1.0 prototype](MIGRATING_0_2.md) for changed symbols, wire keys, and digest handling.
 
 - `specification` identifies the protocol vocabulary.
 - The manifest `version` identifies the published system contract.
@@ -264,48 +235,48 @@ Security-significant relaxation can be just as important as strengthening. Remov
 
 ## Current v0 implementation status
 
-Implemented across `src/port-authority/definition.ts`, `src/port-authority/messages.ts`, `src/port-authority/aapi-v0.ts`, and `src/profiles/totally-tubular.ts`:
+Implemented across `src/perspective/definition.ts`, `src/perspective/messages.ts`, `src/perspective/aapi-v0.ts`, and `src/profiles/totally-tubular.ts`:
 
 - Strict TypeScript interfaces for the canonical vocabulary.
 - Deterministic normalization and SHA-256 content identity.
-- Integrity verification and compact Port Authority references.
+- Integrity verification and compact Perspective references.
 - Identifier, semantic-version, uniqueness, bounds, and cross-reference checks.
 - Closed-schema conformance inspection.
 - Rejection of known projection and transport keys in canonical data.
 - Required extension naming and presence checks.
-- A profile bridge from the current Totally Tubular `ContractRegistry` into a reference `PortAuthorityDefinition`.
+- A profile bridge from the current Totally Tubular `ContractRegistry` into a reference `PerspectiveDefinition`.
 - A reference vocabulary for workspace resources, exact context manifests, capability leases, exact human approval, effect kinds, and proposal execution.
 - Version-pinned invocation and success or failure outcome envelopes.
-- A clean-room, lossless AAPI v0 compatibility bridge for the currently implemented invocation and success-result shapes.
+- An AAPI v0 compatibility bridge for the currently implemented invocation and success-result shapes; conversions reject shapes that cannot be represented.
 
-The registry bridge is an implementation adapter. Every registered contract supplies explicit targets, context slots, authority requirements, effects, execution semantics, and lifecycle references. The bridge copies those declarations rather than inferring them from a capability name, a Boolean approval flag, or an opaque resource resolver. Totally Tubular's available resource, context, authority, effect, and lifecycle vocabularies still describe only this reference slice. They do not narrow what Port Authority can describe.
+The registry bridge is an implementation adapter. Every registered contract supplies explicit targets, context slots, authority requirements, effects, execution semantics, and lifecycle references. The bridge copies those declarations rather than inferring them from a capability name, a Boolean approval flag, or an opaque resource resolver. Totally Tubular's available resource, context, authority, effect, and lifecycle vocabularies still describe only this reference slice. They do not narrow what Perspective can describe.
 
 Not yet implemented or standardized:
 
-- A standalone normative JSON Schema for arbitrary serialized Port Authority manifests.
+- A standalone normative JSON Schema for arbitrary serialized Perspective manifests.
 - Safe parsing of an untrusted serialized definition into the TypeScript domain.
 - A stable cross-language specification and test fixture suite.
 - Automated semantic compatibility comparison.
 - A formal extension registry or vocabulary negotiation mechanism.
 - Normative, cross-language schemas for invocation and outcome envelopes.
-- A Second Service projection interface with fidelity diagnostics.
-- Port Authority-native MCP, WebMCP, HTTP, CLI, Discord, or UI binding documents.
+- A Looking Glass projection interface with fidelity diagnostics.
+- Perspective-native MCP, WebMCP, HTTP, CLI, Discord, or UI binding documents.
 - Cryptographic authorship, signatures, trust roots, or authenticated distribution.
 - Discovery, transport, deployment, persistence, telemetry, or secret management.
-- A concrete AAPI package publishing a Port Authority manifest across multiple adapters.
+- A concrete AAPI package publishing a Perspective manifest across multiple adapters.
 
 The current status is therefore an executable protocol nucleus and reference-manifest bridge, not a finished interoperability standard.
 
 ## Immediate next proof
 
-The next meaningful proof is not an approval interface. It is to describe at least two materially different capabilities using one canonical Port Authority, then project them through more than one adapter without changing their identities or semantic contracts.
+The next meaningful proof is not an approval interface. It is to describe at least two materially different capabilities using one canonical Perspective, then project them through more than one adapter without changing their identities or semantic contracts.
 
 A strong demonstration would include:
 
 1. A model-backed, non-mutating capability such as `content.explain` that performs external compute and declares its disclosures.
 2. An effectful capability such as `task.create` or the existing workspace note operation with explicit resource, authority, lifecycle, and evidence semantics.
-3. MCP and one non-MCP projection generated by Second Service.
-4. A conformance report showing which target format preserved or lost each Port Authority concern.
+3. MCP and one non-MCP projection generated by Looking Glass.
+4. A conformance report showing which target format preserved or lost each Perspective concern.
 5. A Totally Tubular runtime execution proving that projection metadata cannot bypass canonical authority or effects.
 
 That demonstration would establish the intended abstraction: one semantic contract, multiple runtimes and adapters, no transport-specific domain model, and no confusion between the protocol and an operator interface.

@@ -5,7 +5,7 @@ import type {
   EffectDeclaration,
   ExecutionSemantics,
   TargetDefinition,
-} from "../port-authority/definition.js";
+} from "../perspective/definition.js";
 import type { RuntimeSchema, ValidationResult } from "./schema.js";
 
 /** Ordered effect ceiling: read, draft, workspace-write, external-write, destructive. Declarations are trusted host claims. */

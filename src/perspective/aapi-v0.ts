@@ -1,16 +1,16 @@
 import { deepFreezeJsonObject, type JsonValue } from "../core/json.js";
-import type { PortAuthorityReference } from "./definition.js";
+import type { PerspectiveReference } from "./definition.js";
 import {
   type ContextRecord,
-  createPortAuthorityInvocation,
-  createPortAuthoritySuccessOutcome,
+  createPerspectiveInvocation,
+  createPerspectiveSuccessOutcome,
   type ExternalIdentityReference,
   type OpaqueTrace,
-  PORT_AUTHORITY_INVOCATION_PROTOCOL,
-  PORT_AUTHORITY_OUTCOME_PROTOCOL,
-  type PortAuthorityInvocation,
-  type PortAuthorityOutcome,
-  type PortAuthoritySuccessOutcome,
+  PERSPECTIVE_INVOCATION_PROTOCOL,
+  PERSPECTIVE_OUTCOME_PROTOCOL,
+  type PerspectiveInvocation,
+  type PerspectiveOutcome,
+  type PerspectiveSuccessOutcome,
   type PrincipalReference,
   type ProvenanceReference,
   type ScopeReference,
@@ -103,7 +103,7 @@ export interface AapiV0Result<TOutput> {
 }
 
 /** Translate a legacy provider subject to a frozen namespaced reference without authenticating it. */
-export function aapiV0ExternalIdentityToPortAuthority(
+export function aapiV0ExternalIdentityToPerspective(
   identity: AapiV0ExternalIdentity,
 ): ExternalIdentityReference {
   return deepFreezeJsonObject({
@@ -113,7 +113,7 @@ export function aapiV0ExternalIdentityToPortAuthority(
 }
 
 /** Translate a namespaced subject into the legacy provider shape without adding authority. */
-export function portAuthorityExternalIdentityToAapiV0(
+export function perspectiveExternalIdentityToAapiV0(
   identity: ExternalIdentityReference,
 ): AapiV0ExternalIdentity {
   return Object.freeze({
@@ -123,32 +123,32 @@ export function portAuthorityExternalIdentityToAapiV0(
 }
 
 /** Translate a legacy principal into a frozen portable principal with one external identity. */
-export function aapiV0PrincipalToPortAuthority(principal: AapiV0Principal): PrincipalReference {
+export function aapiV0PrincipalToPerspective(principal: AapiV0Principal): PrincipalReference {
   return deepFreezeJsonObject({
     id: principal.id,
-    externalIdentities: [aapiV0ExternalIdentityToPortAuthority(principal.externalIdentity)],
+    externalIdentities: [aapiV0ExternalIdentityToPerspective(principal.externalIdentity)],
   });
 }
 
 /** Translate only principals with exactly one external identity; reject unrepresentable multi-identity values. */
-export function portAuthorityPrincipalToAapiV0(principal: PrincipalReference): AapiV0Principal {
+export function perspectivePrincipalToAapiV0(principal: PrincipalReference): AapiV0Principal {
   const identity = principal.externalIdentities[0];
   if (principal.externalIdentities.length !== 1 || identity === undefined) {
     throw new TypeError("An AAPI v0 principal must have exactly one external identity");
   }
   return Object.freeze({
     id: principal.id,
-    externalIdentity: portAuthorityExternalIdentityToAapiV0(identity),
+    externalIdentity: perspectiveExternalIdentityToAapiV0(identity),
   });
 }
 
 /** Preserve a legacy scope's identifier and kind in a frozen portable reference. */
-export function aapiV0ScopeToPortAuthority(scope: AapiV0Scope): ScopeReference {
+export function aapiV0ScopeToPerspective(scope: AapiV0Scope): ScopeReference {
   return deepFreezeJsonObject({ id: scope.id, kind: scope.kind });
 }
 
 /** Translate only the three legacy scope kinds; reject newer kinds instead of silently coercing them. */
-export function portAuthorityScopeToAapiV0(scope: ScopeReference): AapiV0Scope {
+export function perspectiveScopeToAapiV0(scope: ScopeReference): AapiV0Scope {
   if (!isAapiV0ScopeKind(scope.kind)) {
     throw new TypeError(`Unsupported AAPI v0 scope kind: ${scope.kind}`);
   }
@@ -156,7 +156,7 @@ export function portAuthorityScopeToAapiV0(scope: ScopeReference): AapiV0Scope {
 }
 
 /** Translate source metadata, using explicit null for an absent parent reference. */
-export function aapiV0SourceToPortAuthority(source: AapiV0SourceReference): ProvenanceReference {
+export function aapiV0SourceToPerspective(source: AapiV0SourceReference): ProvenanceReference {
   return deepFreezeJsonObject({
     namespace: source.provider,
     resourceKind: source.resourceType,
@@ -166,7 +166,7 @@ export function aapiV0SourceToPortAuthority(source: AapiV0SourceReference): Prov
 }
 
 /** Translate source metadata, omitting the legacy parent property when the portable parent is null. */
-export function portAuthoritySourceToAapiV0(source: ProvenanceReference): AapiV0SourceReference {
+export function perspectiveSourceToAapiV0(source: ProvenanceReference): AapiV0SourceReference {
   if (source.parentResourceId === null) {
     return Object.freeze({
       provider: source.namespace,
@@ -183,18 +183,18 @@ export function portAuthoritySourceToAapiV0(source: ProvenanceReference): AapiV0
 }
 
 /** Preserve text, attribution, time, and provenance in a frozen portable context record. */
-export function aapiV0ContextItemToPortAuthority(item: AapiV0ContextItem): ContextRecord {
+export function aapiV0ContextItemToPerspective(item: AapiV0ContextItem): ContextRecord {
   return deepFreezeJsonObject({
     id: item.id,
     attribution: { label: item.authorLabel },
     occurredAt: item.occurredAt,
     content: item.content,
-    provenance: aapiV0SourceToPortAuthority(item.source),
+    provenance: aapiV0SourceToPerspective(item.source),
   });
 }
 
 /** Translate text context only; reject nonstring payloads that the legacy shape cannot preserve. */
-export function portAuthorityContextItemToAapiV0(item: ContextRecord): AapiV0ContextItem {
+export function perspectiveContextItemToAapiV0(item: ContextRecord): AapiV0ContextItem {
   if (typeof item.content !== "string") {
     throw new TypeError("An AAPI v0 context item must contain text content");
   }
@@ -203,35 +203,35 @@ export function portAuthorityContextItemToAapiV0(item: ContextRecord): AapiV0Con
     authorLabel: item.attribution.label,
     occurredAt: item.occurredAt,
     content: item.content,
-    source: portAuthoritySourceToAapiV0(item.provenance),
+    source: perspectiveSourceToAapiV0(item.provenance),
   });
 }
 
 /** Bind a legacy request to an explicit portable contract and capability version without adding authority evidence. */
-export function aapiV0InvocationToPortAuthority<TInput>(
+export function aapiV0InvocationToPerspective<TInput>(
   invocation: AapiV0Invocation<TInput>,
-  portAuthority: PortAuthorityReference,
+  perspective: PerspectiveReference,
   capabilityVersion: string,
-): PortAuthorityInvocation {
-  return createPortAuthorityInvocation({
-    portAuthority,
+): PerspectiveInvocation {
+  return createPerspectiveInvocation({
+    perspective,
     correlationId: invocation.correlationId,
-    principal: aapiV0PrincipalToPortAuthority(invocation.principal),
-    scopes: [aapiV0ScopeToPortAuthority(invocation.scope)],
+    principal: aapiV0PrincipalToPerspective(invocation.principal),
+    scopes: [aapiV0ScopeToPerspective(invocation.scope)],
     capability: { id: invocation.capability, version: capabilityVersion },
     input: invocation.input,
     contexts: [],
     authorityEvidence: [],
-    source: aapiV0SourceToPortAuthority(invocation.source),
+    source: aapiV0SourceToPerspective(invocation.source),
   });
 }
 
 /** Translate one-scope invocations only; reject context or authority references the legacy envelope would lose. */
-export function portAuthorityInvocationToAapiV0(
-  invocation: PortAuthorityInvocation,
+export function perspectiveInvocationToAapiV0(
+  invocation: PerspectiveInvocation,
 ): AapiV0Invocation<JsonValue> {
-  if (invocation.protocol !== PORT_AUTHORITY_INVOCATION_PROTOCOL) {
-    throw new TypeError("Unsupported Port Authority invocation protocol");
+  if (invocation.protocol !== PERSPECTIVE_INVOCATION_PROTOCOL) {
+    throw new TypeError("Unsupported Perspective invocation protocol");
   }
   const scope = invocation.scopes[0];
   if (invocation.scopes.length !== 1 || scope === undefined) {
@@ -239,25 +239,25 @@ export function portAuthorityInvocationToAapiV0(
   }
   if (invocation.contexts.length > 0 || invocation.authorityEvidence.length > 0) {
     throw new TypeError(
-      "AAPI v0 cannot losslessly represent Port Authority context or authority references",
+      "AAPI v0 cannot losslessly represent Perspective context or authority references",
     );
   }
   return Object.freeze({
     correlationId: invocation.correlationId,
-    principal: portAuthorityPrincipalToAapiV0(invocation.principal),
-    scope: portAuthorityScopeToAapiV0(scope),
+    principal: perspectivePrincipalToAapiV0(invocation.principal),
+    scope: perspectiveScopeToAapiV0(scope),
     capability: invocation.capability.id,
     input: invocation.input,
-    source: portAuthoritySourceToAapiV0(invocation.source),
+    source: perspectiveSourceToAapiV0(invocation.source),
   });
 }
 
 /** Translate a legacy success and optional provider trace into a checked portable success envelope. */
-export function aapiV0ResultToPortAuthority<TOutput>(
+export function aapiV0ResultToPerspective<TOutput>(
   result: AapiV0Result<TOutput>,
-  portAuthority: PortAuthorityReference,
+  perspective: PerspectiveReference,
   capabilityVersion: string,
-): PortAuthoritySuccessOutcome {
+): PerspectiveSuccessOutcome {
   const traces: readonly OpaqueTrace[] =
     result.providerRequestId === undefined
       ? []
@@ -268,8 +268,8 @@ export function aapiV0ResultToPortAuthority<TOutput>(
             id: result.providerRequestId,
           },
         ];
-  return createPortAuthoritySuccessOutcome({
-    portAuthority,
+  return createPerspectiveSuccessOutcome({
+    perspective,
     correlationId: result.correlationId,
     capability: { id: result.capability, version: capabilityVersion },
     output: result.output,
@@ -278,11 +278,9 @@ export function aapiV0ResultToPortAuthority<TOutput>(
 }
 
 /** Translate successful outcomes with at most one compatible trace; reject failures and lossy trace conversions. */
-export function portAuthorityOutcomeToAapiV0(
-  outcome: PortAuthorityOutcome,
-): AapiV0Result<JsonValue> {
-  if (outcome.protocol !== PORT_AUTHORITY_OUTCOME_PROTOCOL) {
-    throw new TypeError("Unsupported Port Authority outcome protocol");
+export function perspectiveOutcomeToAapiV0(outcome: PerspectiveOutcome): AapiV0Result<JsonValue> {
+  if (outcome.protocol !== PERSPECTIVE_OUTCOME_PROTOCOL) {
+    throw new TypeError("Unsupported Perspective outcome protocol");
   }
   if (outcome.status !== "success") {
     throw new TypeError("AAPI v0 has no lossless failure-result representation");

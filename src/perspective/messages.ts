@@ -4,12 +4,12 @@ import {
   type JsonObject,
   type JsonValue,
 } from "../core/json.js";
-import { PORT_AUTHORITY_PROTOCOL, type PortAuthorityReference } from "./definition.js";
+import { PERSPECTIVE_PROTOCOL, type PerspectiveReference } from "./definition.js";
 
 /** Version discriminator for experimental portable invocation messages. */
-export const PORT_AUTHORITY_INVOCATION_PROTOCOL = "port-authority.invocation/v0" as const;
+export const PERSPECTIVE_INVOCATION_PROTOCOL = "perspective.invocation/v0" as const;
 /** Version discriminator for experimental portable result messages. */
-export const PORT_AUTHORITY_OUTCOME_PROTOCOL = "port-authority.outcome/v0" as const;
+export const PERSPECTIVE_OUTCOME_PROTOCOL = "perspective.outcome/v0" as const;
 
 /** Namespace-qualified external identity claim that requires host authentication before use. */
 export interface ExternalIdentityReference extends JsonObject {
@@ -106,11 +106,11 @@ export interface OpaqueTrace extends JsonObject {
 }
 
 /** Portable invocation request carrying explicit principal, scopes, context, and authority evidence references. */
-export interface PortAuthorityInvocation extends JsonObject {
+export interface PerspectiveInvocation extends JsonObject {
   /** Wire discriminator for this version of the envelope; it does not authenticate the sender. */
-  readonly protocol: typeof PORT_AUTHORITY_INVOCATION_PROTOCOL;
+  readonly protocol: typeof PERSPECTIVE_INVOCATION_PROTOCOL;
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Explicit host-selected principal reference; message construction does not authenticate it. */
@@ -130,11 +130,11 @@ export interface PortAuthorityInvocation extends JsonObject {
 }
 
 /** Successful portable result bound to the same contract, capability, and correlation identifier. */
-export interface PortAuthoritySuccessOutcome extends JsonObject {
+export interface PerspectiveSuccessOutcome extends JsonObject {
   /** Wire discriminator for this version of the envelope; it does not authenticate the sender. */
-  readonly protocol: typeof PORT_AUTHORITY_OUTCOME_PROTOCOL;
+  readonly protocol: typeof PERSPECTIVE_OUTCOME_PROTOCOL;
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Exact capability reference selected from the portable definition. */
@@ -148,7 +148,7 @@ export interface PortAuthoritySuccessOutcome extends JsonObject {
 }
 
 /** Portable error shape with diagnostic details and retry guidance, not a thrown provider exception. */
-export interface PortAuthorityFailure extends JsonObject {
+export interface PerspectiveFailure extends JsonObject {
   /** Stable diagnostic category used for programmatic handling instead of parsing display text. */
   readonly code: string;
   /** Human-readable diagnostic explaining the violated expectation; do not use it as an authority signal. */
@@ -160,11 +160,11 @@ export interface PortAuthorityFailure extends JsonObject {
 }
 
 /** Portable failure outcome preserving correlation and optional diagnostic traces. */
-export interface PortAuthorityFailureOutcome extends JsonObject {
+export interface PerspectiveFailureOutcome extends JsonObject {
   /** Wire discriminator for this version of the envelope; it does not authenticate the sender. */
-  readonly protocol: typeof PORT_AUTHORITY_OUTCOME_PROTOCOL;
+  readonly protocol: typeof PERSPECTIVE_OUTCOME_PROTOCOL;
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Exact capability reference selected from the portable definition. */
@@ -172,18 +172,18 @@ export interface PortAuthorityFailureOutcome extends JsonObject {
   /** Literal failure discriminator selecting the portable error shape. */
   readonly status: "failure";
   /** Structured portable failure with retry guidance and explicit diagnostic data. */
-  readonly error: PortAuthorityFailure;
+  readonly error: PerspectiveFailure;
   /** Opaque provider diagnostic references; these are not proof of execution or authority. */
   readonly traces: readonly OpaqueTrace[];
 }
 
 /** Discriminated success or failure envelope for a portable capability invocation. */
-export type PortAuthorityOutcome = PortAuthoritySuccessOutcome | PortAuthorityFailureOutcome;
+export type PerspectiveOutcome = PerspectiveSuccessOutcome | PerspectiveFailureOutcome;
 
 /** Inputs to checked portable invocation construction; unknown input must first be plain JSON. */
-export interface CreatePortAuthorityInvocationRequest {
+export interface CreatePerspectiveInvocationRequest {
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Explicit host-selected principal reference; message construction does not authenticate it. */
@@ -203,9 +203,9 @@ export interface CreatePortAuthorityInvocationRequest {
 }
 
 /** Inputs to checked success construction; unknown output must first be plain JSON. */
-export interface CreatePortAuthoritySuccessOutcomeRequest {
+export interface CreatePerspectiveSuccessOutcomeRequest {
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Exact capability reference selected from the portable definition. */
@@ -217,15 +217,15 @@ export interface CreatePortAuthoritySuccessOutcomeRequest {
 }
 
 /** Inputs to checked failure construction with explicit portable error data. */
-export interface CreatePortAuthorityFailureOutcomeRequest {
+export interface CreatePerspectiveFailureOutcomeRequest {
   /** Exact version and digest of the portable contract definition to which this message refers. */
-  readonly portAuthority: PortAuthorityReference;
+  readonly perspective: PerspectiveReference;
   /** Caller-selected correlation value preserved in outcomes; it is not an idempotency or authority token. */
   readonly correlationId: string;
   /** Exact capability reference selected from the portable definition. */
   readonly capability: CapabilityReference;
   /** Portable error data validated and frozen during outcome construction. */
-  readonly error: PortAuthorityFailure;
+  readonly error: PerspectiveFailure;
   /** Opaque provider diagnostic references; these are not proof of execution or authority. */
   readonly traces?: readonly OpaqueTrace[];
 }
@@ -292,18 +292,18 @@ function assertText(value: string, label: string): void {
 }
 
 /** Validate the protocol version, identifier, and digest syntax of a portable contract reference. */
-function assertPortAuthorityReference(reference: PortAuthorityReference): void {
-  if (reference.specification !== PORT_AUTHORITY_PROTOCOL) {
-    throw new TypeError("Port Authority reference uses an unsupported specification");
+function assertPerspectiveReference(reference: PerspectiveReference): void {
+  if (reference.specification !== PERSPECTIVE_PROTOCOL) {
+    throw new TypeError("Perspective reference uses an unsupported specification");
   }
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/u.test(reference.version)) {
-    throw new TypeError("Port Authority reference version must be a semantic version");
+    throw new TypeError("Perspective reference version must be a semantic version");
   }
   if (!/^[a-f0-9]{64}$/u.test(reference.digest)) {
-    throw new TypeError("Port Authority reference digest must be a SHA-256 digest");
+    throw new TypeError("Perspective reference digest must be a SHA-256 digest");
   }
-  if (reference.id !== `port_authority_${reference.digest.slice(0, 24)}`) {
-    throw new TypeError("Port Authority reference id must match its digest");
+  if (reference.id !== `perspective_${reference.digest.slice(0, 24)}`) {
+    throw new TypeError("Perspective reference id must match its digest");
   }
 }
 
@@ -375,12 +375,12 @@ function assertTrace(trace: OpaqueTrace): void {
 
 /** Validate common portable contract, correlation, and capability fields before message construction. */
 function assertEnvelope(
-  portAuthority: PortAuthorityReference,
+  perspective: PerspectiveReference,
   correlationId: string,
   capability: CapabilityReference,
   traces: readonly OpaqueTrace[],
 ): void {
-  assertPortAuthorityReference(portAuthority);
+  assertPerspectiveReference(perspective);
   assertText(correlationId, "Correlation id");
   assertCapability(capability);
   for (const trace of traces) {
@@ -389,12 +389,12 @@ function assertEnvelope(
 }
 
 /** Validate plain JSON and reference shapes, then return a detached frozen invocation; this performs no dispatch. */
-export function createPortAuthorityInvocation(
-  request: CreatePortAuthorityInvocationRequest,
-): PortAuthorityInvocation {
+export function createPerspectiveInvocation(
+  request: CreatePerspectiveInvocationRequest,
+): PerspectiveInvocation {
   const contexts = request.contexts ?? [];
   const authorityEvidence = request.authorityEvidence ?? [];
-  assertPortAuthorityReference(request.portAuthority);
+  assertPerspectiveReference(request.perspective);
   assertText(request.correlationId, "Correlation id");
   assertPrincipal(request.principal);
   for (const scope of request.scopes) {
@@ -411,8 +411,8 @@ export function createPortAuthorityInvocation(
   assertJsonSafe(request.input, "Invocation input");
 
   return deepFreezeJsonObject({
-    protocol: PORT_AUTHORITY_INVOCATION_PROTOCOL,
-    portAuthority: request.portAuthority,
+    protocol: PERSPECTIVE_INVOCATION_PROTOCOL,
+    perspective: request.perspective,
     correlationId: request.correlationId,
     principal: request.principal,
     scopes: request.scopes,
@@ -425,16 +425,16 @@ export function createPortAuthorityInvocation(
 }
 
 /** Validate and freeze explicit successful output and traces without claiming external execution proof. */
-export function createPortAuthoritySuccessOutcome(
-  request: CreatePortAuthoritySuccessOutcomeRequest,
-): PortAuthoritySuccessOutcome {
+export function createPerspectiveSuccessOutcome(
+  request: CreatePerspectiveSuccessOutcomeRequest,
+): PerspectiveSuccessOutcome {
   const traces = request.traces ?? [];
-  assertEnvelope(request.portAuthority, request.correlationId, request.capability, traces);
+  assertEnvelope(request.perspective, request.correlationId, request.capability, traces);
   assertJsonSafe(request.output, "Outcome output");
 
   return deepFreezeJsonObject({
-    protocol: PORT_AUTHORITY_OUTCOME_PROTOCOL,
-    portAuthority: request.portAuthority,
+    protocol: PERSPECTIVE_OUTCOME_PROTOCOL,
+    perspective: request.perspective,
     correlationId: request.correlationId,
     capability: request.capability,
     status: "success",
@@ -444,18 +444,18 @@ export function createPortAuthoritySuccessOutcome(
 }
 
 /** Validate and freeze structured portable failure data and diagnostic traces. */
-export function createPortAuthorityFailureOutcome(
-  request: CreatePortAuthorityFailureOutcomeRequest,
-): PortAuthorityFailureOutcome {
+export function createPerspectiveFailureOutcome(
+  request: CreatePerspectiveFailureOutcomeRequest,
+): PerspectiveFailureOutcome {
   const traces = request.traces ?? [];
-  assertEnvelope(request.portAuthority, request.correlationId, request.capability, traces);
+  assertEnvelope(request.perspective, request.correlationId, request.capability, traces);
   assertText(request.error.code, "Failure code");
   assertText(request.error.message, "Failure message");
   assertJsonSafe(request.error.details, "Failure details");
 
   return deepFreezeJsonObject({
-    protocol: PORT_AUTHORITY_OUTCOME_PROTOCOL,
-    portAuthority: request.portAuthority,
+    protocol: PERSPECTIVE_OUTCOME_PROTOCOL,
+    perspective: request.perspective,
     correlationId: request.correlationId,
     capability: request.capability,
     status: "failure",
