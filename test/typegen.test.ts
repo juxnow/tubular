@@ -147,6 +147,42 @@ describe("TypeScript schema compiler", () => {
     );
   });
 
+  it("preserves nullability with TypeScript 6's implicit strict default", () => {
+    const input = fixture("export interface Input { value: string | null }");
+    const config = input.fileSystem.readFile(input.tsconfigPath);
+    if (!config) throw new Error("Missing fixture configuration");
+    input.migrate("tsconfig.json", config, config.replace('"strict":true,', ""));
+    expect(
+      compileTypeSchemas({ ...input, typeNames: ["Input"] })["Input"]?.properties?.["value"],
+    ).toEqual({ anyOf: [{ type: "null" }, { type: "string" }] });
+  });
+
+  it("rejects explicit strict false unless strictNullChecks is explicitly restored", () => {
+    const source = "export interface Input { value: string | null }";
+    expect(() => createSchemaCompiler(fixture(source, { strict: false }))).toThrow(
+      /strictNullChecks/,
+    );
+    expect(
+      createSchemaCompiler(fixture(source, { strict: false, strictNullChecks: true })).compileTypes(
+        ["Input"],
+      )["Input"]?.properties?.["value"],
+    ).toEqual({ anyOf: [{ type: "null" }, { type: "string" }] });
+  });
+
+  it("isolates cached schemas from caller mutation when producing later bindings", () => {
+    const input = fixture(
+      "export function greet(input: { name: string }): { greeting: string } { return { greeting: input.name }; }",
+    );
+    const compiler = createSchemaCompiler(input);
+    const original = compiler.compileBindings(["greet"], "bindings.ts");
+    const schemas = compiler.compileTools(["greet", "greet"]);
+    const required = schemas["greet"]?.inputSchema.required;
+    if (!required) throw new Error("Missing required name");
+    required.splice(0);
+    expect(compiler.compileTools(["greet"])["greet"]?.inputSchema.required).toEqual(["name"]);
+    expect(compiler.compileBindings(["greet"], "bindings.ts")).toBe(original);
+  });
+
   it("derives an async function's argument and awaited result without separate schemas", () => {
     const input = fixture(`
       export interface Search { query: string; limit?: number }

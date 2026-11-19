@@ -246,7 +246,9 @@ describe("typed tool runtime", () => {
       schemas,
       authorize: () => "ALLOW",
     });
-    schemas.greet.inputSchema.required = [];
+    const required = schemas.greet.inputSchema.required;
+    if (!required) throw new Error("Greeting fixture must require a name");
+    required.splice(0);
     expect(Object.isFrozen(runtime.list())).toBe(true);
     expect(Object.isFrozen(runtime.list()[0]?.inputSchema)).toBe(true);
     expect(await runtime.invoke("greet", {}, { tenant: "JUX" })).toMatchObject({

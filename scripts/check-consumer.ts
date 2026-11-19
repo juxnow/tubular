@@ -98,7 +98,7 @@ export function echo(input: { value: string }, context: { prefix: string }): { v
   run(process.execPath, [...generate, "--check"]);
   const source = `import assert from "node:assert/strict";
 import { createToolRuntime } from "@juxnow/tubular";
-import { compileToolSchemas } from "@juxnow/tubular/compiler";
+import { compileToolBindings, compileToolSchemas } from "@juxnow/tubular/compiler";
 import { createTypedMcpServer } from "@juxnow/tubular/mcp";
 import { echo } from "./bindings.js";
 const runtime = createToolRuntime({ definitions: [echo({ description: "Echo", effect: "read" })], authorize: () => "ALLOW" });
@@ -106,6 +106,15 @@ assert.deepEqual(await runtime.invoke("echo", { value: "hello" }, { prefix: "hos
 assert.equal((await runtime.invoke("echo", { value: 42 }, { prefix: "" })).status, "invalid_input");
 assert.equal(typeof compileToolSchemas, "function");
 assert.equal(typeof createTypedMcpServer, "function");
+const bound = compileToolBindings({ tsconfigPath: "tsconfig.json", entryFile: "tools.ts", functionNames: ["echo"], outputFile: "bindings.ts" });
+const initialDirectory = process.cwd();
+try {
+  process.chdir("build");
+  const fromBuild = compileToolBindings({ tsconfigPath: "../tsconfig.json", entryFile: "tools.ts", functionNames: ["echo"], outputFile: "../bindings.ts" });
+  assert.equal(fromBuild, bound);
+} finally {
+  process.chdir(initialDirectory);
+}
 `;
   const consumer = path.join(directory, "consumer.ts");
   writeFileSync(consumer, source);
@@ -149,7 +158,7 @@ assert.equal(typeof createTypedMcpServer, "function");
   )
     throw new Error("Binding drift check failed");
   process.stdout.write(
-    "Packed consumer verified: exports, CLI generation, TypeScript binding, runtime validation, handler protection, drift detection.\n",
+    "Packed consumer verified: exports, CLI generation, TypeScript binding, runtime validation, handler protection, drift detection, cwd changes.\n",
   );
 } finally {
   rmSync(directory, { recursive: true, force: true });

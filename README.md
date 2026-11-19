@@ -66,6 +66,8 @@ The hello example retains the original read-only API. The governed example gener
 
 See [test scenarios and boundaries](docs/TESTING.md) for source-derived fixtures, seeded data, in-memory generation, and the separate packed-consumer check.
 
+The private 0.2.0 revision makes the Perspective rename an explicit breaking change. See the [0.2.0 migration notes](docs/MIGRATING_0_2.md) before updating source imports or stored contract references.
+
 ## Declare a capability
 
 ```ts

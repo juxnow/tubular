@@ -1,7 +1,7 @@
 import path from "node:path";
 import ts from "typescript";
 import type { GenerationHost } from "../../src/typegen/command.js";
-import { nodeCompilerFileSystem } from "../../src/typegen/file-system.js";
+import { createNodeCompilerFileSystem } from "../../src/typegen/file-system.js";
 import type { SchemaProjectOptions } from "../../src/typegen/index.js";
 import configuration from "./tsconfig.json" with { type: "json" };
 
@@ -23,7 +23,9 @@ export function compilerProject(
 ): CompilerProject {
   const root = path.resolve("test/virtual-project");
   const resolve = (file: string): string => path.resolve(root, file);
-  const libraryRoot = path.dirname(ts.getDefaultLibFilePath({}));
+  const nodeFiles = createNodeCompilerFileSystem();
+  const installedLibraries = path.dirname(nodeFiles.getDefaultLibFileName({}));
+  const libraryRoot = resolve("stdlib");
   const isLibrary = (file: string): boolean =>
     path.dirname(file) === libraryRoot && /^lib\..*\.d\.ts$/.test(path.basename(file));
   const files = new Map<string, string>([
@@ -47,11 +49,19 @@ export function compilerProject(
   const host: GenerationHost = {
     useCaseSensitiveFileNames: true,
     getCurrentDirectory: () => root,
+    getDefaultLibFileName: (options) => path.join(libraryRoot, ts.getDefaultLibFileName(options)),
+    readArtifact: (file) => {
+      const text = files.get(resolve(file));
+      return text === undefined ? undefined : new TextEncoder().encode(text);
+    },
     readFile: (file) =>
       files.get(resolve(file)) ??
-      (isLibrary(file) ? nodeCompilerFileSystem.readFile(file) : undefined),
+      (isLibrary(file)
+        ? nodeFiles.readFile(path.join(installedLibraries, path.basename(file)))
+        : undefined),
     fileExists: (file) =>
-      files.has(resolve(file)) || (isLibrary(file) && nodeCompilerFileSystem.fileExists(file)),
+      files.has(resolve(file)) ||
+      (isLibrary(file) && nodeFiles.fileExists(path.join(installedLibraries, path.basename(file)))),
     directoryExists: (directory) =>
       directory === libraryRoot ||
       [...files.keys()].some((file) => file.startsWith(`${resolve(directory)}${path.sep}`)),

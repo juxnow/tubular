@@ -1,6 +1,6 @@
 {
   "name": "@juxnow/tubular",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Declare TypeScript agent tools once, then derive contracts, validation and MCP bindings.",
   "type": "module",

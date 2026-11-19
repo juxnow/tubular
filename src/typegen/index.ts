@@ -3,9 +3,13 @@ import ts from "typescript";
 import type { ToolDocumentation } from "../contracts/documentation.js";
 import { isJsonValue, type JsonValue, sha256 } from "../core/json.js";
 import { validateSchema } from "../type-validation/index.js";
-import { type CompilerFileSystem, compilerHost, nodeCompilerFileSystem } from "./file-system.js";
+import {
+  type CompilerFileSystem,
+  compilerHost,
+  createNodeCompilerFileSystem,
+} from "./file-system.js";
 
-export type { CompilerFileSystem } from "./file-system.js";
+export { type CompilerFileSystem, createNodeCompilerFileSystem } from "./file-system.js";
 
 /** A deliberately bounded JSON Schema subset emitted by Tubular. */
 export interface JsonSchema {
@@ -105,13 +109,13 @@ interface Compiler {
 
 /** Load the project, require strict nullability, reject TypeScript errors, and resolve the entry export table. */
 function createCompiler(options: SchemaProjectOptions): Compiler {
-  const files = options.fileSystem ?? nodeCompilerFileSystem;
+  const files = options.fileSystem ?? createNodeCompilerFileSystem();
   const currentDirectory = files.getCurrentDirectory();
   const configPath = path.resolve(currentDirectory, options.tsconfigPath);
   const configDir = path.dirname(configPath);
   const entryPath = path.resolve(configDir, options.entryFile);
   const config = ts.readConfigFile(configPath, (file) => files.readFile(file));
-  if (config.error) throw new Error(formatDiagnostics([config.error]));
+  if (config.error) throw new Error(formatDiagnostics([config.error], files, currentDirectory));
   const parsed = ts.parseJsonConfigFileContent(
     config.config,
     files,
@@ -119,8 +123,9 @@ function createCompiler(options: SchemaProjectOptions): Compiler {
     { noEmit: true, noCheck: false },
     configPath,
   );
-  if (parsed.errors.length) throw new Error(formatDiagnostics(parsed.errors));
-  if (!(parsed.options.strictNullChecks ?? parsed.options.strict ?? false)) {
+  if (parsed.errors.length)
+    throw new Error(formatDiagnostics(parsed.errors, files, currentDirectory));
+  if (!(parsed.options.strictNullChecks ?? parsed.options.strict !== false)) {
     throw new Error(
       "strictNullChecks must be enabled to preserve nullability in generated schemas",
     );
@@ -128,12 +133,12 @@ function createCompiler(options: SchemaProjectOptions): Compiler {
   const program = ts.createProgram(
     [...new Set([...parsed.fileNames, entryPath])],
     parsed.options,
-    compilerHost(parsed.options, files),
+    compilerHost(parsed.options, files, currentDirectory),
   );
   const errors = ts
     .getPreEmitDiagnostics(program)
     .filter((d) => d.category === ts.DiagnosticCategory.Error);
-  if (errors.length) throw new Error(formatDiagnostics(errors));
+  if (errors.length) throw new Error(formatDiagnostics(errors, files, currentDirectory));
   const source = program.getSourceFile(entryPath);
   if (!source) throw new Error(`Entry file not found: ${entryPath}`);
   const checker = program.getTypeChecker();
@@ -146,10 +151,14 @@ function createCompiler(options: SchemaProjectOptions): Compiler {
 }
 
 /** Render TypeScript diagnostics with file locations for actionable compiler and CLI errors. */
-function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string {
+function formatDiagnostics(
+  diagnostics: readonly ts.Diagnostic[],
+  files: CompilerFileSystem,
+  currentDirectory: string,
+): string {
   return ts.formatDiagnosticsWithColorAndContext(diagnostics, {
-    getCanonicalFileName: (file) => file,
-    getCurrentDirectory: ts.sys.getCurrentDirectory,
+    getCanonicalFileName: (file) => (files.useCaseSensitiveFileNames ? file : file.toLowerCase()),
+    getCurrentDirectory: () => currentDirectory,
     getNewLine: () => "\n",
   });
 }
@@ -642,8 +651,11 @@ export function compileToolBindings(options: CompileToolBindingsOptions): string
 }
 
 /** Render direct bindings using the same checked program as the schema projection. */
-function toolBindings(compiler: Compiler, names: readonly string[], outputFile: string): string {
-  const schemas = toolSchemas(compiler, names);
+function toolBindings(
+  compiler: Compiler,
+  schemas: Record<string, ToolSchemas>,
+  outputFile: string,
+): string {
   const directory = compiler.directory;
   const entry = compiler.entryPath;
   const output = path.resolve(compiler.currentDirectory, outputFile);
@@ -699,10 +711,21 @@ export interface SchemaCompiler {
 /** Check a project once, then derive related contracts from the same immutable source snapshot. */
 export function createSchemaCompiler(options: SchemaProjectOptions): SchemaCompiler {
   const compiler = createCompiler(options);
+  const toolCache = new Map<string, Record<string, ToolSchemas>>();
+  const projectTools = (names: readonly string[]): Record<string, ToolSchemas> => {
+    const selected = [...new Set(names)].sort();
+    const key = JSON.stringify(selected);
+    let schemas = toolCache.get(key);
+    if (schemas === undefined) {
+      schemas = toolSchemas(compiler, selected);
+      toolCache.set(key, schemas);
+    }
+    return structuredClone(schemas);
+  };
   return Object.freeze({
     compileTypes: (names: readonly string[]) => typeSchemas(compiler, names),
-    compileTools: (names: readonly string[]) => toolSchemas(compiler, names),
+    compileTools: projectTools,
     compileBindings: (names: readonly string[], outputFile: string) =>
-      toolBindings(compiler, names, outputFile),
+      toolBindings(compiler, projectTools(names), outputFile),
   });
 }

@@ -242,7 +242,7 @@
     }
   ],
   "description": "A provider-neutral, bounded-agency runtime described by a Perspective manifest.",
-  "digest": "4df2b06bdf2383899d04eecd8f4c422edf69d50ffcf31ad76a1a8a1bd3d5315e",
+  "digest": "9b81954b074ea53e233f4fc3d4ceab93d706ff6e16f9ed7be14ac729dbdf81a2",
   "effectKinds": [
     {
       "description": "Delete or irreversibly replace state.",
@@ -281,7 +281,7 @@
     }
   ],
   "extensions": {},
-  "id": "perspective_4df2b06bdf2383899d04eecd",
+  "id": "perspective_9b81954b074ea53e233f4fc3",
   "lifecycles": [
     {
       "description": "A proposal is evaluated, optionally approved, dispatched, and reconciled to evidence.",
@@ -385,5 +385,5 @@
   ],
   "specification": "perspective/v0",
   "title": "Totally Tubular reference runtime",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

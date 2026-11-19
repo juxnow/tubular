@@ -1,3 +1,4 @@
+import path from "node:path";
 import ts from "typescript";
 
 /** Read-only project access used by the compiler; hosts may supply a virtual workspace. */
@@ -6,7 +7,7 @@ export interface CompilerFileSystem {
   readonly useCaseSensitiveFileNames: boolean;
   /** Resolve relative project paths against this directory. */
   getCurrentDirectory(): string;
-  /** Read source or configuration text; undefined means the file does not exist. */
+  /** Read TypeScript source or config text, allowing BOM/encoding normalization; undefined denotes unavailable input. */
   readFile(file: string): string | undefined;
   /** Check file existence without reading or changing its contents. */
   fileExists(file: string): boolean;
@@ -22,30 +23,42 @@ export interface CompilerFileSystem {
     includes?: readonly string[],
     depth?: number,
   ): string[];
+  /** Absolute standard-library entry path in this filesystem; referenced lib files resolve beside it. */
+  getDefaultLibFileName(options: ts.CompilerOptions): string;
   /** Resolve aliases or symlinks consistently with fileExists and readFile. */
   realpath(file: string): string;
 }
 
-/** Default Node-backed project reader. Compilation itself never emits files. */
-export const nodeCompilerFileSystem: CompilerFileSystem = {
-  useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
-  getCurrentDirectory: ts.sys.getCurrentDirectory,
-  readFile: ts.sys.readFile,
-  fileExists: ts.sys.fileExists,
-  directoryExists: ts.sys.directoryExists,
-  getDirectories: ts.sys.getDirectories,
-  readDirectory: ts.sys.readDirectory,
-  realpath: ts.sys.realpath ?? ((file) => file),
-};
+/** Create Node project access on demand; importing the compiler does not require a TypeScript system. */
+export function createNodeCompilerFileSystem(): CompilerFileSystem {
+  const system = ts.sys;
+  if (!system)
+    throw new Error("No Node compiler filesystem is available; provide fileSystem explicitly");
+  return {
+    useCaseSensitiveFileNames: system.useCaseSensitiveFileNames,
+    getCurrentDirectory: () => process.cwd(),
+    readFile: (file) => system.readFile(file),
+    fileExists: (file) => system.fileExists(file),
+    directoryExists: (directory) => system.directoryExists(directory),
+    getDirectories: (directory) => system.getDirectories(directory),
+    readDirectory: (...args) => system.readDirectory(...args),
+    getDefaultLibFileName: (options) =>
+      path.join(path.dirname(system.getExecutingFilePath()), ts.getDefaultLibFileName(options)),
+    realpath: (file) => system.realpath?.(file) ?? file,
+  };
+}
 
 /** Build TypeScript's host around one read-only filesystem, including source and dependency loading. */
 export function compilerHost(
   options: ts.CompilerOptions,
   files: CompilerFileSystem,
+  currentDirectory = files.getCurrentDirectory(),
 ): ts.CompilerHost {
   return {
-    ...ts.createCompilerHost(options, true),
-    getCurrentDirectory: () => files.getCurrentDirectory(),
+    getDefaultLibFileName: (libraryOptions) => files.getDefaultLibFileName(libraryOptions),
+    getDefaultLibLocation: () => path.dirname(files.getDefaultLibFileName(options)),
+    getNewLine: () => "\n",
+    getCurrentDirectory: () => currentDirectory,
     readFile: (file) => files.readFile(file),
     fileExists: (file) => files.fileExists(file),
     directoryExists: (directory) => files.directoryExists(directory),

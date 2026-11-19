@@ -5,7 +5,7 @@ import { definePerspective, type PerspectiveDefinition } from "../perspective/de
 export function perspectiveFromRegistry(registry: ContractRegistry): PerspectiveDefinition {
   return definePerspective({
     name: "totally-tubular.reference-runtime",
-    version: "0.1.0",
+    version: "0.2.0",
     title: "Totally Tubular reference runtime",
     description: "A provider-neutral, bounded-agency runtime described by a Perspective manifest.",
     scopeKinds: ["private", "project", "external-resource"],

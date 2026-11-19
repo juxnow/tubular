@@ -170,9 +170,9 @@
   ],
   "protocol": "looking-glass.contract-catalog/v0",
   "sourcePerspective": {
-    "digest": "4df2b06bdf2383899d04eecd8f4c422edf69d50ffcf31ad76a1a8a1bd3d5315e",
-    "id": "perspective_4df2b06bdf2383899d04eecd",
+    "digest": "9b81954b074ea53e233f4fc3d4ceab93d706ff6e16f9ed7be14ac729dbdf81a2",
+    "id": "perspective_9b81954b074ea53e233f4fc3",
     "specification": "perspective/v0",
-    "version": "0.1.0"
+    "version": "0.2.0"
   }
 }

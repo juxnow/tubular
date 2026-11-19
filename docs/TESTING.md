@@ -25,7 +25,7 @@ const schemas = compiler.compileTools(["search"]);
 const bindings = compiler.compileBindings(["search"], "generated/bindings.ts");
 ```
 
-Creation performs TypeScript diagnostics with checking enabled and requires strict nullability. Reusing the snapshot avoids rebuilding the program for each projection. Changes to source files require a new snapshot. There is no global cache or automatic invalidation. A caller may provide a read-only `CompilerFileSystem`; paths resolve against that host's current directory, and the compiler returns artifacts without emitting files. This host is trusted build infrastructure, not an authority source for runtime tool calls.
+Creation performs TypeScript diagnostics with checking enabled and requires strict nullability, including TypeScript 6's implicit strict default. Reusing the snapshot avoids rebuilding the program and deriving the same tool selection again. Returned schemas are independent copies. Changes to source files require a new snapshot. There is no global cache or automatic invalidation. A caller may provide a read-only `CompilerFileSystem`, including its standard-library entry path; paths and diagnostics resolve against that host's current directory, and the compiler returns artifacts without emitting files. This host is trusted build infrastructure, not an authority source for runtime tool calls.
 
 ## In-memory generation and explicit revisions
 
@@ -39,7 +39,7 @@ These source revisions are a foundation for controlled fixture evolution, not a 
 
 `scenarios.ts` samples synthetic display names, workspace labels, allowed query terms, category filters, correlation UUIDs, and decimal provider identifiers. Provider records preserve message-to-channel-to-guild relationships. Perspective references are sealed through the actual catalog implementation, rather than invented digest strings. Compatibility tests exercise envelope translation; they do not establish authentication, execute legacy capabilities, or validate their membership in the referenced catalog.
 
-Regression seeds are explicit and appear in test names. Runtime and MCP scenarios use the same source-derived constraints, and negative cases change one field or authority claim at a time. Optional fields stay omitted when testing handler defaults. Each factory call returns new mutable request data; authorization comes from separately supplied host context.
+Regression seeds are explicit and appear in test names. Sampling scales the full random word instead of selecting its low bits, avoiding the short cycles that otherwise repeat boolean and four-value choices at fixed call strides. Runtime and MCP scenarios use the same source-derived constraints, and negative cases change one field or authority claim at a time. Optional fields stay omitted when testing handler defaults. Each factory call returns new mutable request data; authorization comes from separately supplied host context.
 
 Replay a seeded integration case with:
 

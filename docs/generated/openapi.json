@@ -2,7 +2,7 @@
   "info": {
     "description": "Documentation-only projection of a Perspective. These paths are not HTTP endpoints.",
     "title": "Totally Tubular reference runtime capability documentation",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -252,10 +252,10 @@
           "version": "1.0.0"
         },
         "x-perspective-source": {
-          "digest": "4df2b06bdf2383899d04eecd8f4c422edf69d50ffcf31ad76a1a8a1bd3d5315e",
-          "id": "perspective_4df2b06bdf2383899d04eecd",
+          "digest": "9b81954b074ea53e233f4fc3d4ceab93d706ff6e16f9ed7be14ac729dbdf81a2",
+          "id": "perspective_9b81954b074ea53e233f4fc3",
           "specification": "perspective/v0",
-          "version": "0.1.0"
+          "version": "0.2.0"
         },
         "x-totally-tubular-approval": "exact-human",
         "x-totally-tubular-effect": "workspace-write",
@@ -268,9 +268,9 @@
   "x-documentation-projection": true,
   "x-network-endpoint": false,
   "x-perspective-source": {
-    "digest": "4df2b06bdf2383899d04eecd8f4c422edf69d50ffcf31ad76a1a8a1bd3d5315e",
-    "id": "perspective_4df2b06bdf2383899d04eecd",
+    "digest": "9b81954b074ea53e233f4fc3d4ceab93d706ff6e16f9ed7be14ac729dbdf81a2",
+    "id": "perspective_9b81954b074ea53e233f4fc3",
     "specification": "perspective/v0",
-    "version": "0.1.0"
+    "version": "0.2.0"
   }
 }

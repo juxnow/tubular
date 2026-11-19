@@ -1,8 +1,45 @@
 import { describe, expect, it } from "vitest";
 import { runGenerateCommand } from "../src/typegen/command.js";
+import { artifactEncodings } from "./fixtures/artifact-encodings.js";
 import { generationScenario } from "./fixtures/generation-scenario.js";
 
 describe("tubular generation pipeline", () => {
+  it.each(artifactEncodings)(
+    "rejects $name artifacts without decoding or rewriting them",
+    ({ encode }) => {
+      const { project, args } = generationScenario();
+      runGenerateCommand(args, project.fileSystem);
+      for (const artifact of ["schemas.json", "bindings.ts"]) {
+        const host = {
+          ...project.fileSystem,
+          readArtifact: (file: string) => {
+            const bytes = project.fileSystem.readArtifact(file);
+            return bytes && file.endsWith(artifact)
+              ? encode(new TextDecoder().decode(bytes))
+              : bytes;
+          },
+        };
+        expect(() => runGenerateCommand([...args, "--check"], host)).toThrow(/out of date/);
+      }
+      expect(project.writes).toHaveLength(2);
+    },
+  );
+
+  it("surfaces artifact read failures instead of reporting ordinary drift", () => {
+    const { project, args } = generationScenario();
+    runGenerateCommand(args, project.fileSystem);
+    const denied = Object.assign(new Error("Permission denied: schemas.json"), { code: "EACCES" });
+    expect(() =>
+      runGenerateCommand([...args, "--check"], {
+        ...project.fileSystem,
+        readArtifact: () => {
+          throw denied;
+        },
+      }),
+    ).toThrow(denied);
+    expect(project.writes).toHaveLength(2);
+  });
+
   it("discovers authored annotations and writes schemas plus direct bindings", () => {
     const { project, args } = generationScenario();
     expect(runGenerateCommand(args, project.fileSystem)).toBe(

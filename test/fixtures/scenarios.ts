@@ -24,7 +24,7 @@ export function scenarioRandom(seed: number) {
   return {
     /** Choose only from declared domain values; an empty vocabulary is a fixture error. */
     pick<T>(values: readonly T[]): T {
-      const value = values[next() % values.length];
+      const value = values[Math.floor((next() / 0x100000000) * values.length)];
       if (value === undefined) throw new Error("Cannot sample an empty fixture vocabulary");
       return value;
     },

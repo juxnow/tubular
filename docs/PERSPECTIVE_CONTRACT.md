@@ -196,6 +196,8 @@ An OpenAPI-shaped artifact must not claim that synthetic paths are reachable net
 
 The protocol specification version, Perspective version, and capability version are independent.
 
+The Perspective rename is recorded in the package and reference manifest as 0.2.0. See [migration from the 0.1.0 prototype](MIGRATING_0_2.md) for changed symbols, wire keys, and digest handling.
+
 - `specification` identifies the protocol vocabulary.
 - The manifest `version` identifies the published system contract.
 - Each capability `version` identifies that capability's semantic contract.

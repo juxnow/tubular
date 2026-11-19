@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import packageMetadata from "../package.json" with { type: "json" };
 import { createDefaultRegistry } from "../src/catalog.js";
 import { sha256, stableStringify } from "../src/core/json.js";
 import {
@@ -96,6 +97,8 @@ describe("Perspective Protocol v0 conformance", () => {
     const perspective = referencePerspective();
     expect(perspective.specification).toBe(PERSPECTIVE_PROTOCOL);
     expect(perspective.specification).toBe("perspective/v0");
+    expect(perspective.version).toBe("0.2.0");
+    expect(packageMetadata.version).toBe("0.2.0");
 
     const capability = perspective.capabilities.find(
       (candidate) => candidate.id === "workspace.note.append",
@@ -239,7 +242,7 @@ describe("Perspective Protocol v0 conformance", () => {
     }[] = [
       {
         name: "Perspective version",
-        mutate: (input) => ({ ...input, version: "0.2.0" }),
+        mutate: (input) => ({ ...input, version: "0.3.0" }),
       },
       {
         name: "capability version",
